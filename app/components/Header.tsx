@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, ShoppingCart, User, Truck, Crown, Factory, Store, ShieldCheck, LogOut } from 'lucide-react';
+import { Search, ShoppingCart, User, Truck, Crown, Factory, Store, ShieldCheck, LogOut, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
@@ -45,6 +45,7 @@ export default function Header() {
   const cartCount = cartItems.length;
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -53,6 +54,15 @@ export default function Header() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,7 +96,7 @@ export default function Header() {
   return (
     <header className="bg-white shadow-md sticky top-0 z-50 overflow-visible">
       {/* Üst Bilgi Çubuğu (Top Bar) */}
-      <div className="bg-gray-100 border-b border-gray-200">
+      <div className="bg-gray-100 border-b border-gray-200 hidden md:block">
         <div className="container mx-auto px-4">
           <div className="flex justify-end items-center gap-4 py-1.5 text-xs">
             <Link href="/siparis-takip" className="flex items-center gap-1 text-[#484848] hover:text-[#FF6000] transition-colors">
@@ -126,49 +136,39 @@ export default function Header() {
 
       {/* Ana Header */}
       <div className="container mx-auto px-4 py-2">
-        <div className="flex items-center gap-4">
-          {/* Logo */}
-          <Link href="/" className="flex-shrink-0">
-            <div className="flex items-center">
-              <Image
-                src="/matbaagross-logo.png"
-                alt="MatbaaGross"
-                width={200}
-                height={56}
-                className="h-12 w-auto object-contain"
-                priority
-              />
-            </div>
-          </Link>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="md:hidden inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-gray-200 text-[#484848] hover:bg-gray-50"
+              aria-label="Menüyü aç"
+            >
+              <Menu size={22} />
+            </button>
 
-          {/* Arama Çubuğu – compact */}
-          <div className="flex-1 max-w-4xl">
-            <form className="flex">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  placeholder="Ürün, kategori veya stok kodu ara..."
-                  className="w-full px-3 py-2 pl-3 pr-9 border border-gray-300 rounded-l-md focus:outline-none focus:border-[#FF6000] text-sm"
+            {/* Logo */}
+            <Link href="/" className="flex-1 md:flex-none md:flex-shrink-0 flex justify-center md:justify-start">
+              <div className="flex items-center">
+                <Image
+                  src="/matbaagross-logo.png"
+                  alt="MatbaaGross"
+                  width={200}
+                  height={56}
+                  className="h-10 md:h-12 w-auto object-contain"
+                  priority
                 />
-                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
               </div>
-              <button
-                type="submit"
-                className="bg-[#FF6000] hover:bg-[#e55a00] text-white font-semibold px-5 py-2 rounded-r-md transition-colors text-sm"
-              >
-                ARA
-              </button>
-            </form>
-          </div>
+            </Link>
 
-          {/* Kullanıcı Alanı */}
-          <div className="flex items-center gap-4 flex-shrink-0">
+            {/* Kullanıcı Alanı */}
+            <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
             {session && status === 'authenticated' ? (
               <div className="relative" ref={accountRef}>
                 <button
                   type="button"
                   onClick={() => setAccountOpen((o) => !o)}
-                  className="flex flex-col items-center gap-0.5 px-2 py-1.5 text-[#484848] hover:text-[#FF6000] transition-colors"
+                  className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-[#FF6000] transition-colors"
                 >
                   <User size={20} />
                   <span className="hidden lg:inline text-[10px] font-medium">
@@ -200,21 +200,21 @@ export default function Header() {
               <>
                 <Link
                   href="/login?callbackUrl=/admin"
-                  className="flex flex-col items-center gap-0.5 px-2 py-1.5 text-[#484848] hover:text-red-600 transition-colors"
+                  className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-red-600 transition-colors"
                 >
                   <ShieldCheck size={20} />
                   <span className="hidden lg:inline text-[10px] font-medium">Yönetim</span>
                 </Link>
                 <Link
                   href="/login?callbackUrl=/seller-dashboard&loginType=seller"
-                  className="flex flex-col items-center gap-0.5 px-2 py-1.5 text-[#484848] hover:text-orange-600 transition-colors"
+                  className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-orange-600 transition-colors"
                 >
                   <Store size={20} />
                   <span className="hidden lg:inline text-[10px] font-medium">Mağaza Girişi</span>
                 </Link>
                 <Link
                   href="/login"
-                  className="flex flex-col items-center gap-0.5 px-2 py-1.5 text-[#484848] hover:text-blue-600 transition-colors"
+                  className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-blue-600 transition-colors"
                 >
                   <User size={20} />
                   <span className="hidden lg:inline text-[10px] font-medium">Giriş Yap</span>
@@ -223,7 +223,7 @@ export default function Header() {
             ) : null}
             <Link
               href="/sepetim"
-              className="relative flex flex-col items-center gap-0.5 px-2 py-1.5 text-[#484848] hover:text-[#FF6000] transition-colors"
+              className="relative flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-[#FF6000] transition-colors"
             >
               <ShoppingCart size={20} className="text-[#FF6000]" />
               <span className="hidden lg:inline text-[10px] font-medium">Sepetim</span>
@@ -234,12 +234,33 @@ export default function Header() {
               )}
             </Link>
           </div>
+          </div>
+
+          {/* Arama Çubuğu */}
+          <div className="w-full flex-1 max-w-4xl md:mx-auto">
+            <form className="flex">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Ürün, kategori veya stok kodu ara..."
+                  className="w-full min-h-11 px-3 py-2 pl-3 pr-9 border border-gray-300 rounded-l-md focus:outline-none focus:border-[#FF6000] text-sm"
+                />
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              </div>
+              <button
+                type="submit"
+                className="min-h-11 bg-[#FF6000] hover:bg-[#e55a00] text-white font-semibold px-5 py-2 rounded-r-md transition-colors text-sm"
+              >
+                ARA
+              </button>
+            </form>
+          </div>
         </div>
       </div>
 
       {/* Mega Menü - Dinamik (Admin panelinden yönetilen kategoriler) */}
       {(menuItems.length > 0 || menuLoading) && (
-        <nav className="bg-white border-t border-gray-200 relative overflow-visible">
+        <nav className="bg-white border-t border-gray-200 relative overflow-visible hidden md:block">
           <div className="w-full px-4 max-w-[1440px] mx-auto">
             <ul className="flex items-center justify-between gap-4 whitespace-nowrap overflow-visible">
               {menuLoading ? (
@@ -297,6 +318,74 @@ export default function Header() {
             </ul>
           </div>
         </nav>
+      )}
+
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-[9999]">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Menüyü kapat"
+          />
+          <div className="absolute left-0 top-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <span className="font-bold text-[#484848]">Menü</span>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg hover:bg-gray-50 text-[#484848]"
+                aria-label="Kapat"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-2 py-2">
+                {menuLoading ? (
+                  <div className="px-3 py-2 text-sm text-gray-500">Menü yükleniyor...</div>
+                ) : (
+                  <ul className="space-y-1">
+                    {menuItems
+                      .filter(
+                        (item) =>
+                          item.name !== 'Fason Üretim Merkezi' &&
+                          !item.link.includes('fason-uretim-merkezi') &&
+                          !item.link.includes('fason-hizmetler')
+                      )
+                      .map((item) => (
+                        <li key={item.id}>
+                          <Link
+                            href={item.link}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="flex items-center justify-between px-3 py-3 rounded-lg hover:bg-gray-50 text-[#484848] font-semibold"
+                          >
+                            <span>{item.name}</span>
+                          </Link>
+                          {item.subCategories.length > 0 && (
+                            <ul className="pl-3 pb-1">
+                              {item.subCategories.map((sub) => (
+                                <li key={sub.link}>
+                                  <Link
+                                    href={sub.link}
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="block px-3 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700"
+                                  >
+                                    {sub.name}
+                                  </Link>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </header>

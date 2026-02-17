@@ -32,6 +32,13 @@ body {
   font-size: 14px; /* text-sm base – daha yoğun enterprise görünüm */
 }
 
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .scrollbar-hide {
   scrollbar-width: none;
   -ms-overflow-style: none;

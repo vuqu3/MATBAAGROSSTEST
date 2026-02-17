@@ -101,7 +101,7 @@ export default function AmbalajPage() {
               <button
                 key={category.id}
                 onClick={() => setSelectedCategory(category.id)}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+                className={`min-h-11 px-6 py-3 rounded-lg font-semibold transition-colors ${
                   selectedCategory === category.id
                     ? 'bg-[#1e3a8a] text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'

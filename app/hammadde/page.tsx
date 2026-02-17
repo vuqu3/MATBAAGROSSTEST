@@ -100,7 +100,7 @@ export default function HammaddePage() {
           </div>
 
           {/* Ürün Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredProducts.map((product) => (
               <div
                 key={product.id}
@@ -135,7 +135,7 @@ export default function HammaddePage() {
                   </div>
                 </div>
 
-                <button className="w-full bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <button className="w-full min-h-11 bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
                   <ShoppingCart size={18} />
                   Sepete Ekle
                 </button>

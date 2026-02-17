@@ -256,7 +256,7 @@ export default function CategoryPage({ params }: PageProps) {
                             handleAddToCart(e as unknown as React.MouseEvent, product, imageUrl, Number(price), isReady);
                           }
                         }}
-                        className={`w-full font-medium py-1.5 px-3 rounded-md text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                        className={`w-full min-h-11 font-medium py-2 px-3 rounded-md text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                           isAdded
                             ? 'bg-green-600 hover:bg-green-700 text-white'
                             : 'bg-[#FF6000] hover:bg-[#e55a00] text-white'
