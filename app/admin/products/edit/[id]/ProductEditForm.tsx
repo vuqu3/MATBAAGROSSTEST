@@ -34,7 +34,8 @@ const productSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-type FormData = z.infer<typeof productSchema>;
+type FormInput = z.input<typeof productSchema>;
+type FormData = z.output<typeof productSchema>;
 
 type Product = {
   id: string;
@@ -111,7 +112,7 @@ export default function ProductEditForm({ product }: { product: Product }) {
     setValue,
     watch,
     formState: { errors },
-  } = useForm<FormData>({
+  } = useForm<FormInput, undefined, FormData>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: product.name,
@@ -129,7 +130,7 @@ export default function ProductEditForm({ product }: { product: Product }) {
       productionDays: product.productionDays != null ? Number(product.productionDays) : undefined,
       isPublished: product.isPublished,
       isActive: product.isActive,
-    },
+    } satisfies FormInput,
   });
 
   useEffect(() => {
@@ -154,7 +155,7 @@ export default function ProductEditForm({ product }: { product: Product }) {
         name: data.name,
         sku: data.sku,
         description: data.description || null,
-        imageUrl: data.imageUrl && String(data.imageUrl).trim() ? String(data.imageUrl).trim() : null,
+        imageUrl: imageUrls[0] || data.imageUrl?.trim() || null,
         categoryId: data.categoryId,
         basePrice: data.basePrice,
         buyPrice: data.buyPrice ?? null,
@@ -170,7 +171,6 @@ export default function ProductEditForm({ product }: { product: Product }) {
         attributes: productAttributes.length > 0 ? productAttributes : null,
         vendorName: vendorName.trim() || 'MatbaaGross',
         images: imageUrls.length > 0 ? imageUrls.slice(0, 5) : null,
-        imageUrl: imageUrls[0] || data.imageUrl?.trim() || null,
         highlights: Object.keys(highlights).length > 0 ? highlights : null,
         descriptionDetail: (descriptionDetail.productInfo || descriptionDetail.extraInfo) ? descriptionDetail : null,
         relatedProducts: relatedProductIds.length > 0 ? relatedProductIds.slice(0, 20) : null,

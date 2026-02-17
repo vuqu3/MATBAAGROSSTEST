@@ -48,18 +48,21 @@ const productSchema = z.object({
   buyPrice: z.number().optional(),
   salePrice: z.number().optional(),
   taxRate: z.number().default(20),
-  stock: z.preprocess(
-    (v) => (v === '' || (typeof v === 'number' && Number.isNaN(v)) ? undefined : v),
-    z.number().min(0).optional()
-  ),
+  stock: z
+    .preprocess(
+      (v) => (v === '' || (typeof v === 'number' && Number.isNaN(v)) ? undefined : v),
+      z.number().min(0)
+    )
+    .optional(),
   stockQuantity: z.number().optional(),
   supplier: z.string().optional(),
   minOrderQuantity: z.number().optional(),
   productionDays: z.number().optional(),
-  dynamicAttributes: z.record(z.any()).optional(),
+  dynamicAttributes: z.record(z.string(), z.any()).optional(),
 });
 
-type ProductFormData = z.infer<typeof productSchema>;
+type ProductFormInput = z.input<typeof productSchema>;
+type ProductFormData = z.output<typeof productSchema>;
 
 export default function NewProductPage() {
   const router = useRouter();
@@ -78,7 +81,7 @@ export default function NewProductPage() {
     formState: { errors },
     watch,
     setValue,
-  } = useForm<ProductFormData>({
+  } = useForm<ProductFormInput, undefined, ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       productType: 'READY',

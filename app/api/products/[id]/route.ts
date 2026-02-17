@@ -45,10 +45,11 @@ export async function PATCH(
     }
 
     const rawStock = body.stockQuantity ?? body.stock;
-    const stockNum = rawStock !== undefined && rawStock !== null
+    const stockNumRaw = rawStock !== undefined && rawStock !== null
       ? parseInt(String(rawStock), 10)
-      : (product.productType === 'READY' ? Number(product.stockQuantity ?? product.stock ?? 0) : undefined);
-    const validStock = Number.isNaN(stockNum) ? 0 : Math.max(0, stockNum);
+      : (product.productType === 'READY' ? Number(product.stockQuantity ?? product.stock ?? 0) : 0);
+    const stockNum = typeof stockNumRaw === 'number' && Number.isFinite(stockNumRaw) ? stockNumRaw : 0;
+    const validStock = Math.max(0, stockNum);
 
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) data.name = String(body.name).trim();
@@ -64,17 +65,17 @@ export async function PATCH(
     if (body.supplier !== undefined) data.supplier = body.supplier ? String(body.supplier).trim() : null;
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
     if (body.isPublished !== undefined) data.isPublished = Boolean(body.isPublished);
-    if (body.dynamicAttributes !== undefined) data.dynamicAttributes = body.dynamicAttributes;
-    if (body.attributes !== undefined) data.attributes = body.attributes;
+    if (body.dynamicAttributes !== undefined) data.dynamicAttributes = body.dynamicAttributes as any;
+    if (body.attributes !== undefined) data.attributes = body.attributes as any;
     if (body.vendorName !== undefined) data.vendorName = typeof body.vendorName === 'string' && body.vendorName.trim() ? body.vendorName.trim() : 'MatbaaGross';
     if (body.vendorId !== undefined) data.vendorId = body.vendorId && typeof body.vendorId === 'string' && body.vendorId.trim() ? body.vendorId.trim() : null;
     if (body.images !== undefined) {
       const arr = Array.isArray(body.images) ? body.images : [];
-      data.images = arr.filter((u: unknown) => typeof u === 'string' && u.trim().length > 0).slice(0, 5);
+      data.images = (arr.filter((u: unknown) => typeof u === 'string' && u.trim().length > 0).slice(0, 5)) as any;
     }
-    if (body.highlights !== undefined) data.highlights = body.highlights && typeof body.highlights === 'object' ? body.highlights : null;
-    if (body.descriptionDetail !== undefined) data.descriptionDetail = body.descriptionDetail && typeof body.descriptionDetail === 'object' ? body.descriptionDetail : null;
-    if (body.relatedProducts !== undefined) data.relatedProducts = Array.isArray(body.relatedProducts) ? body.relatedProducts.slice(0, 20) : null;
+    if (body.highlights !== undefined) data.highlights = (body.highlights && typeof body.highlights === 'object' ? body.highlights : undefined) as any;
+    if (body.descriptionDetail !== undefined) data.descriptionDetail = (body.descriptionDetail && typeof body.descriptionDetail === 'object' ? body.descriptionDetail : undefined) as any;
+    if (body.relatedProducts !== undefined) data.relatedProducts = (Array.isArray(body.relatedProducts) ? body.relatedProducts.slice(0, 20) : undefined) as any;
 
     if (body.status !== undefined && ['PENDING', 'APPROVED', 'REJECTED'].includes(String(body.status))) {
       data.status = body.status as 'PENDING' | 'APPROVED' | 'REJECTED';

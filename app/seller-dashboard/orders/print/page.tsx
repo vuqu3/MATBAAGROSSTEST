@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Image from 'next/image';
 import Barcode from 'react-barcode';
 
@@ -31,6 +31,20 @@ type OrderPrint = {
 };
 
 export default function OrderPrintPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white">
+          <p className="text-gray-500">Yükleniyor...</p>
+        </div>
+      }
+    >
+      <OrderPrintPageInner />
+    </Suspense>
+  );
+}
+
+function OrderPrintPageInner() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
   const [order, setOrder] = useState<OrderPrint | null>(null);

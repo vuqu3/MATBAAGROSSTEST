@@ -93,7 +93,7 @@ export async function POST(request: Request) {
         supplier: product.supplier?.trim() || null,
         minOrderQuantity: product.minOrderQuantity ? parseInt(product.minOrderQuantity.toString()) : null,
         productionDays: product.productionDays ? parseInt(product.productionDays.toString()) : null,
-        dynamicAttributes: product.dynamicAttributes || null,
+        dynamicAttributes: (product.dynamicAttributes || undefined) as any,
         isActive: product.isActive !== undefined ? product.isActive : true,
         isPublished: product.isPublished !== undefined ? product.isPublished : false,
       };

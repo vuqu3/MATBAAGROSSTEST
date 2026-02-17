@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
@@ -32,7 +33,9 @@ export default async function ProductsPage() {
 
   return (
     <div>
-      <ProductsTableWithTabs products={products} categories={categories} />
+      <Suspense fallback={null}>
+        <ProductsTableWithTabs products={products} categories={categories} />
+      </Suspense>
     </div>
   );
 }

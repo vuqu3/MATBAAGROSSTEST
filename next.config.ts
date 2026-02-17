@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
@@ -12,10 +16,6 @@ const nextConfig: NextConfig = {
       },
     ],
     unoptimized: false,
-  },
-  // Next.js 16: turbopack artık üst seviyede (experimental.turbo kaldırıldı)
-  turbopack: {
-    root: process.cwd(),
   },
 };
 

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+type SupportTicketStatus = 'OPEN' | 'ANSWERED' | 'IN_PROGRESS' | 'CLOSED' | 'RESOLVED';
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -43,15 +45,15 @@ export async function PATCH(
     const body = await request.json();
     const { status } = body as { status?: string };
 
-    const data: { status?: string } = {};
-    const validStatuses = ['OPEN', 'ANSWERED', 'IN_PROGRESS', 'CLOSED', 'RESOLVED'];
-    if (status != null && validStatuses.includes(status)) {
-      data.status = status;
+    const data: Record<string, unknown> = {};
+    const validStatuses = ['OPEN', 'ANSWERED', 'IN_PROGRESS', 'CLOSED', 'RESOLVED'] as const;
+    if (status != null && (validStatuses as readonly string[]).includes(status)) {
+      data.status = status as SupportTicketStatus;
     }
 
     const ticket = await prisma.supportTicket.update({
       where: { id },
-      data,
+      data: data as any,
       include: {
         user: { select: { id: true, email: true, name: true } },
         order: { select: { id: true, barcode: true } },

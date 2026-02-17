@@ -15,7 +15,7 @@ export async function GET(request: Request) {
         include: { category: { select: { id: true, name: true, slug: true } } },
       });
       const order = ids.reduce((acc: Record<string, number>, id, i) => { acc[id] = i; return acc; }, {});
-      products.sort((a, b) => (order[a.id] ?? 99) - (order[b.id] ?? 99));
+      products.sort((a: { id: string }, b: { id: string }) => (order[a.id] ?? 99) - (order[b.id] ?? 99));
       return NextResponse.json(products);
     }
 
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
           sku,
           description: description?.trim() || null,
           imageUrl: imageUrlTrimmed,
-          images: imagesNormalized.length > 0 ? imagesNormalized : null,
+          images: (imagesNormalized.length > 0 ? imagesNormalized : undefined) as any,
           productType: 'READY',
           categoryId,
           vendorId: vendor.id,
@@ -235,13 +235,13 @@ export async function POST(request: Request) {
         supplier: supplier?.trim() || null,
         minOrderQuantity: productType === 'CUSTOM' ? minOrderQuantity : null,
         productionDays: productType === 'CUSTOM' ? productionDays : null,
-        dynamicAttributes: dynamicAttributes || null,
-        attributes: attributes ?? null,
+        dynamicAttributes: (dynamicAttributes || undefined) as any,
+        attributes: (attributes ?? undefined) as any,
         vendorName: typeof vendorName === 'string' && vendorName.trim() ? vendorName.trim() : 'MatbaaGross',
-        images: imagesNormalized.length > 0 ? imagesNormalized : null,
-        highlights: highlights && typeof highlights === 'object' ? highlights : null,
-        descriptionDetail: descriptionDetail && typeof descriptionDetail === 'object' ? descriptionDetail : null,
-        relatedProducts: Array.isArray(relatedProducts) ? relatedProducts.slice(0, 20) : null,
+        images: (imagesNormalized.length > 0 ? imagesNormalized : undefined) as any,
+        highlights: (highlights && typeof highlights === 'object' ? highlights : undefined) as any,
+        descriptionDetail: (descriptionDetail && typeof descriptionDetail === 'object' ? descriptionDetail : undefined) as any,
+        relatedProducts: (Array.isArray(relatedProducts) ? relatedProducts.slice(0, 20) : undefined) as any,
         isActive: true,
         isPublished: body.isPublished !== false,
       },

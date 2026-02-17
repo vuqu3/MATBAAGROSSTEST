@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         quantity: number;
         unitPrice: number;
         totalPrice: number;
-        options?: Record<string, unknown>;
+        options?: unknown;
         imageUrl?: string | null;
         uploadedFileUrl?: string | null;
       }>;
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
       where: { id: { in: productIds } },
       select: { id: true, vendorId: true },
     });
-    const productVendorMap = Object.fromEntries(products.map((p) => [p.id, p.vendorId]));
+    const productVendorMap = Object.fromEntries(products.map((p: { id: string; vendorId: string | null }) => [p.id, p.vendorId]));
 
     const order = await prisma.order.create({
       data: {
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
             quantity: Math.max(1, Math.floor(Number(i.quantity) || 0)),
             unitPrice: Number(i.unitPrice) || 0,
             totalPrice: Number(i.totalPrice) || 0,
-            options: i.options ?? undefined,
+            options: (i.options ?? undefined) as any,
             imageUrl: i.imageUrl ? String(i.imageUrl) : null,
             uploadedFileUrl: i.uploadedFileUrl ? String(i.uploadedFileUrl) : null,
             vendorId: productVendorMap[i.productId] ?? null, // null = MatbaaGross
