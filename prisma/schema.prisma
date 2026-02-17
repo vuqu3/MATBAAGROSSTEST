@@ -1,0 +1,268 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SELLER
+}
+
+enum UserType {
+  INDIVIDUAL
+  CORPORATE
+}
+
+enum AddressType {
+  BILLING
+  SHIPPING
+}
+
+enum ProductType {
+  READY   // Hazır Stok – logo istenmez, direkt satılır
+  CUSTOM  // Özel Baskılı – müşteri logo yüklemek zorundadır
+}
+
+enum ProductStatus {
+  PENDING   // Onay Bekliyor
+  APPROVED  // Onaylandı (Yayında)
+  REJECTED  // Reddedildi
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  password      String
+  name          String?
+  role          UserRole    @default(USER)
+  userType      UserType    @default(INDIVIDUAL)
+  companyName   String?     // Şirket Unvanı (Kurumsal)
+  taxOffice     String?     // Vergi Dairesi
+  taxNumber     String?     // Vergi No
+  phoneNumber   String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  addresses     Address[]
+  orders          Order[]
+  supportTickets  SupportTicket[]
+  vendor          Vendor?   // Satıcı hesabı (bir kullanıcı en fazla bir satıcıya sahip olabilir)
+
+  @@map("users")
+}
+
+model Vendor {
+  id              String    @id @default(cuid())
+  name            String    // Örn: "Kral Ambalaj"
+  slug            String    @unique
+  commissionRate  Float     @default(2.0) // Komisyon oranı (%)
+  balance         Float     @default(0)   // Kazanılan bakiye
+  ownerId         String    @unique
+  owner           User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  products        Product[]
+  orderItems      OrderItem[]
+
+  @@map("vendors")
+}
+
+model Address {
+  id         String      @id @default(cuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       AddressType // Fatura veya Teslimat
+  title      String?     // Adres başlığı (örn. "Merkez", "Şube")
+  city       String
+  district   String?     // İlçe
+  line1      String     // Adres satırı 1
+  line2      String?    // Adres satırı 2
+  postalCode String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  orders     Order[]
+
+  @@map("addresses")
+}
+
+enum OrderStatus {
+  PENDING     // Beklemede
+  PROCESSING  // Hazırlanıyor
+  SHIPPED     // Kargolandı
+  COMPLETED   // Tamamlandı
+}
+
+enum PaymentStatus {
+  AWAITING_PAYMENT  // Ödeme bekleniyor
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  barcode       String?       @unique // MG-2024-X892 formatında benzersiz barkod (yeni siparişlerde otomatik)
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addressId     String        // Teslimat adresi
+  address       Address       @relation(fields: [addressId], references: [id])
+  totalAmount   Float
+  status        OrderStatus   @default(PENDING)
+  paymentStatus PaymentStatus @default(AWAITING_PAYMENT)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  items           OrderItem[]
+  supportTickets  SupportTicket[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id               String   @id @default(cuid())
+  orderId          String
+  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId        String
+  productName      String
+  quantity         Int
+  unitPrice        Float
+  totalPrice       Float
+  options          Json?    // Seçilen özellikler: { paperWeight, quantity, lamination, finish } vb.
+  imageUrl         String?
+  uploadedFileUrl  String?  // Müşterinin yüklediği logo/dosya linki (CUSTOM ürünler için)
+  vendorId         String?  // Bu kalemi hangi satıcı teslim ediyor (null = Matbaagross)
+  vendor           Vendor?  @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
+
+  @@map("order_items")
+}
+
+model Category {
+  id            String     @id @default(cuid())
+  name          String
+  slug          String     @unique
+  description   String?
+  parentId      String?
+  parent        Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children      Category[] @relation("CategoryTree")
+  products      Product[]
+  order         Int        @default(0)   // Menü/sayfa sıralaması
+  isActive      Boolean    @default(true)
+  showOnNavbar  Boolean    @default(false) // Ana sayfa menüde gösterilsin mi
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Kategoriye özel dinamik özellikler için JSONB
+  attributes  Json?      // Örn: { fields: [{ name: "kağıt_gramajı", type: "select", options: ["80gr", "100gr"] }] }
+
+  @@map("categories")
+}
+
+model Product {
+  id                String      @id @default(cuid())
+  name              String
+  sku               String      @unique
+  description       String?     // Kısa özet açıklama
+  productType       ProductType   @default(READY)
+  categoryId        String
+  category          Category    @relation(fields: [categoryId], references: [id])
+  vendorId          String?     // null = Matbaagross (admin), dolu = satıcı ürünü
+  vendor            Vendor?     @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  
+  // Fiyatlandırma
+  basePrice         Float       @default(0)
+  vendorName        String      @default("MatbaaGross")
+  attributes        Json?       // Ürüne özel seçenekler: [{ label: "Ebat", options: [{ label: "20x28", priceImpact: 0 }, ...] }]
+  purchasePrice     Float?      // Alış fiyatı
+  buyPrice          Float?      // Alış fiyatı (maliyet hesabı için)
+  salePrice         Float?      // Satış fiyatı
+  taxRate           Float       @default(20) // KDV oranı
+  
+  // Stok ve Tedarikçi
+  stock             Int         @default(0) // Stok takibi
+  stockQuantity     Int?        // Sadece READY için (eski alan, geriye dönük uyumluluk)
+  supplier          String?     // Tedarikçi Firma Adı
+  
+  // Özel Baskı Ürünü için
+  minOrderQuantity  Int?        // Minimum sipariş adedi
+  productionDays    Int?        // Üretim süresi (gün)
+  
+  // Dinamik özellikler (JSONB)
+  dynamicAttributes Json?       // Örn: { en: 20, boy: 30, yükseklik: 10 } veya { kağıt_gramajı: "170gr", kırım_tipi: "A4" }
+  
+  // Dosya kuralları (CUSTOM için)
+  fileFormats       Json?       // Örn: { accepted: ["pdf", "ai", "eps"], template: "bıçak_izi_url" }
+  
+  // Görseller: en fazla 5 link (SQLite için Json array)
+  images            Json?       // ["url1", "url2", ...] max 5
+  imageUrl          String?     // Ana ürün resmi (URL)
+  
+  // Öne Çıkan Özellikler (Trendyol tarzı): { "Materyal": "Kağıt", "Ebat": "25x35", ... }
+  highlights        Json?
+  
+  // Ürün Bilgisi + Ek Bilgiler (zengin içerik)
+  descriptionDetail Json?       // { "productInfo": "...", "extraInfo": "..." }
+  
+  // Benzer / Önerilen ürün ID'leri
+  relatedProducts   Json?       // ["productId1", "productId2", ...]
+  
+  // Durum
+  status            ProductStatus @default(PENDING)
+  isActive          Boolean     @default(true)
+  isPublished       Boolean     @default(false)
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@map("products")
+}
+
+enum SupportTicketStatus {
+  OPEN        // Bekleyen
+  ANSWERED    // Yanıtlandı (geriye dönük)
+  IN_PROGRESS // İşlemde
+  CLOSED      // Kapatıldı
+  RESOLVED    // Çözüldü
+}
+
+model SupportTicket {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId   String?
+  order     Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  subject   String              // Konu
+  status    SupportTicketStatus @default(OPEN)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  messages  TicketMessage[]
+
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id            String        @id @default(cuid())
+  ticketId      String
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message       String
+  isStaffReply  Boolean       // true = Admin yazdı, false = Müşteri
+  createdAt     DateTime      @default(now())
+
+  @@map("ticket_messages")
+}
+
+model HeroWidget {
+  id        String   @id @default(cuid())
+  title     String   // Üst şerit yazısı (örn. Ramazan, Ambalaj)
+  subtitle  String   // Alt slogan (örn. İmsakiye & Kutu, %30 İndirim)
+  imageUrl  String?  // Resim yolu (public/uploads/widgets/...)
+  targetUrl String   // Tıklayınca gideceği link
+  order     Int      @default(0) // Sıralama
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("hero_widgets")
+}
