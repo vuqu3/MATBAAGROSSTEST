@@ -5,6 +5,8 @@ import { CheckCircle, ShoppingBag, Home, Package } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
+
 export default function SiparisBasariliPage() {
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get('orderNo') || '';
