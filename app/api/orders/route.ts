@@ -196,10 +196,14 @@ export async function POST(request: Request) {
           })
         );
 
+        const customerEmail = order.user.email;
+        const adminEmail = process.env.ADMIN_EMAIL || 'volkanongunn@gmail.com';
+
         const { data, error } = await resend.emails.send({
           from: 'onboarding@resend.dev',
-          to: 'volkanongunn@gmail.com',
-          subject: 'SİSTEM TESTİ - Sipariş ' + Date.now(),
+          to: customerEmail,
+          bcc: [adminEmail],
+          subject: `Siparişiniz Alındı — ${order.barcode || order.id.slice(-8)}`,
           html: emailHtml,
         });
 
