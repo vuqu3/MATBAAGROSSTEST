@@ -89,10 +89,11 @@ export default function OnayPage() {
   const [saveAddress, setSaveAddress] = useState(true);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(true);
+  const [cartReady, setCartReady] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [termsError, setTermsError] = useState(false);
 
-  // Fetch user addresses from database
+  // Fetch user addresses from database — only re-run when session changes, NOT on address selection
   useEffect(() => {
     const fetchAddresses = async () => {
       if (!session?.user?.id) {
@@ -108,11 +109,11 @@ export default function OnayPage() {
           console.log('CHECKOUT_ADDRESSES_SUCCESS:', { count: data.length });
           setSavedAddresses(data);
           
-          // Auto-select first address if available and no address is selected
-          if (data.length > 0 && !selectedAddressId) {
-            setSelectedAddressId(data[0].id);
+          // Auto-select first address only on initial load
+          if (data.length > 0) {
+            setSelectedAddressId((prev) => prev ?? data[0].id);
             setShowNewAddressForm(false);
-          } else if (data.length === 0) {
+          } else {
             // Show new address form if no saved addresses
             setShowNewAddressForm(true);
             setSelectedAddressId(null);
@@ -128,7 +129,13 @@ export default function OnayPage() {
     };
 
     fetchAddresses();
-  }, [session?.user?.id, selectedAddressId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]);
+
+  // Wait for cart to hydrate from localStorage
+  useEffect(() => {
+    setCartReady(true);
+  }, [items]);
 
   const handleAddressChange = (field: keyof AddressForm, value: string) => {
     setAddressForm((prev) => ({ ...prev, [field]: value }));
@@ -212,16 +219,40 @@ export default function OnayPage() {
     setStep('processing');
 
     try {
-      // Get selected address
-      const selectedAddress = selectedAddressId ? getSelectedAddress() : null;
-      
-      if (!selectedAddress && !showNewAddressForm) {
+      let resolvedAddressId = selectedAddressId;
+
+      // If user filled in a new address form, save it to DB first to get a real ID
+      if (showNewAddressForm && !selectedAddressId) {
+        if (!addressForm.city.trim() || !addressForm.address.trim()) {
+          throw new Error('Lütfen adres bilgilerini eksiksiz doldurun');
+        }
+        const addrRes = await fetch('/api/user/addresses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'SHIPPING',
+            title: `${addressForm.firstName} ${addressForm.lastName}`.trim() || 'Teslimat Adresi',
+            city: addressForm.city,
+            district: addressForm.district,
+            line1: addressForm.address,
+            postalCode: '',
+          }),
+        });
+        if (!addrRes.ok) {
+          const addrErr = await addrRes.json();
+          throw new Error(addrErr.error || 'Adres kaydedilemedi');
+        }
+        const savedAddr = await addrRes.json();
+        resolvedAddressId = savedAddr.id;
+      }
+
+      if (!resolvedAddressId) {
         throw new Error('Lütfen bir teslimat adresi seçin');
       }
 
       // Prepare order data
       const orderData = {
-        addressId: selectedAddressId || '', // Will be validated on backend
+        addressId: resolvedAddressId,
         items: items.map(item => ({
           productId: item.productId,
           productName: item.name,
@@ -741,7 +772,7 @@ export default function OnayPage() {
                   )}
                   <button
                     type="submit"
-                    disabled={loading || items.length === 0 || !isAddressValid() || !isCardValid || !agreedToTerms}
+                    disabled={loading || !cartReady || items.length === 0 || !isAddressValid() || !isCardValid || !agreedToTerms}
                     className="w-full py-3.5 rounded-xl font-bold text-sm text-white transition-all
                       bg-gradient-to-r from-[#FF6000] to-[#ea580c]
                       hover:from-[#ea580c] hover:to-[#c2410c]
