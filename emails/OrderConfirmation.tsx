@@ -192,7 +192,7 @@ export default function OrderConfirmation({
               </Text>
               <Hr style={hr} />
               <Text style={footerText}>
-                © 2024 MatbaaGross. Tüm hakları saklıdır.
+                © 2026 MatbaaGross. Tüm hakları saklıdır.
               </Text>
             </Column>
           </Row>

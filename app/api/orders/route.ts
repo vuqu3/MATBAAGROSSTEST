@@ -200,10 +200,10 @@ export async function POST(request: Request) {
         const adminEmail = process.env.ADMIN_EMAIL || 'volkanongunn@gmail.com';
 
         const { data, error } = await resend.emails.send({
-          from: 'onboarding@resend.dev',
+          from: 'MatbaaGross Sipariş <noreply@matbaagross.com>',
           to: customerEmail,
           bcc: [adminEmail],
-          subject: `Siparişiniz Alındı — ${order.barcode || order.id.slice(-8)}`,
+          subject: `Siparişiniz Alındı! 🚀 - MatbaaGross`,
           html: emailHtml,
         });
 
