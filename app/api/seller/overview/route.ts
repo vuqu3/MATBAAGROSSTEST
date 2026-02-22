@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { OrderStatus } from '@prisma/client';
 
 export async function GET() {
   const session = await auth();
@@ -29,7 +30,7 @@ export async function GET() {
     prisma.orderItem.count({
       where: {
         vendorId: vendor.id,
-        order: { status: { in: ['PENDING', 'PREPARING'] } },
+        order: { status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] } },
       },
     }),
     prisma.orderItem.findMany({
@@ -37,7 +38,7 @@ export async function GET() {
       select: { totalPrice: true },
     }),
     prisma.product.count({
-      where: { vendorId: vendor.id, status: { in: ['DRAFT', 'WAITING'] } },
+      where: { vendorId: vendor.id, status: 'PENDING' },
     }),
     prisma.orderItem.findMany({
       where: { vendorId: vendor.id },
@@ -56,7 +57,7 @@ export async function GET() {
       by: ['createdAt'],
       where: {
         vendorId: vendor.id,
-        order: { status: { in: ['DELIVERED', 'COMPLETED'] } },
+        order: { status: { in: [OrderStatus.COMPLETED] } },
         createdAt: { gte: thirtyDaysAgo },
       },
       _sum: { totalPrice: true },

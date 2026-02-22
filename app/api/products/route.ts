@@ -240,12 +240,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!sku || typeof sku !== 'string' || sku.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'SKU zorunludur' },
-        { status: 400 }
-      );
-    }
+    const generatedSku = (sku && typeof sku === 'string' && sku.trim().length > 0)
+      ? sku.trim()
+      : 'MG-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
 
     if (!productType || !['READY', 'CUSTOM'].includes(productType)) {
       return NextResponse.json(
@@ -302,7 +299,7 @@ export async function POST(request: Request) {
     const product = await prisma.product.create({
       data: {
         name: name.trim(),
-        sku: sku.trim(),
+        sku: generatedSku,
         description: description?.trim() || null,
         imageUrl: imageUrl && imageUrl.trim() !== '' ? imageUrl.trim() : null,
         productType: productType as 'READY' | 'CUSTOM',

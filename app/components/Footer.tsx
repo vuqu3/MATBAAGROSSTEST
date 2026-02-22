@@ -45,7 +45,7 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
 
       {/* Footer İçerik */}
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
           <div>
             <h2 className="text-xl font-bold mb-4">MatbaaGross</h2>
             <p className="text-gray-300 text-sm mb-4">
@@ -75,51 +75,39 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
             <h3 className="font-semibold mb-4">Kategoriler</h3>
             <ul className="space-y-3 text-sm text-gray-300">
               <li>
-                <Link href="/ofset-dijital-baski" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
+                <Link href="/urunler?kategori=kutu-koli" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
                   <span className="text-[#f97316] text-xs">▸</span>
-                  Ofset & Dijital Baskı
+                  Kutu & Koli
                 </Link>
               </li>
               <li>
-                <Link href="/kutu-ambalaj" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
+                <Link href="/urunler?kategori=gida-restoran-kutulari" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
                   <span className="text-[#f97316] text-xs">▸</span>
-                  Kutu & Ambalaj
+                  Gıda & Restoran Kutuları
                 </Link>
               </li>
               <li>
-                <Link href="/restaurant-gida-grubu" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
+                <Link href="/urunler?kategori=bardak-icecek-ambalajlari" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
                   <span className="text-[#f97316] text-xs">▸</span>
-                  Restoran & Gıda Grubu
+                  Bardak & İçecek Ambalajları
                 </Link>
               </li>
               <li>
-                <Link href="/karton-bardak-uretimi" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
-                  <span className="text-[#f97316] text-xs">▸</span>
-                  Karton Bardak Üretimi
-                </Link>
-              </li>
-              <li>
-                <Link href="/promosyon-urunleri" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
-                  <span className="text-[#f97316] text-xs">▸</span>
-                  Promosyon Ürünleri
-                </Link>
-              </li>
-              <li>
-                <Link href="/brosur-ilan" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
+                <Link href="/urunler?kategori=brosur-ilan" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
                   <span className="text-[#f97316] text-xs">▸</span>
                   Broşür & İlan
                 </Link>
               </li>
               <li>
-                <Link href="/oto-paspas" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
+                <Link href="/urunler?kategori=matbaa-malzemeleri" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
                   <span className="text-[#f97316] text-xs">▸</span>
-                  Oto Paspas
+                  Matbaa Malzemeleri
                 </Link>
               </li>
               <li>
-                <Link href="/matbaa-malzemeleri" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
+                <Link href="/urunler?kategori=promosyon" className="flex items-center gap-2 hover:text-[#f97316] transition-all duration-200 hover:translate-x-1">
                   <span className="text-[#f97316] text-xs">▸</span>
-                  Matbaa Malzemeleri
+                  Promosyon Ürünleri
                 </Link>
               </li>
               <li className="pt-2 border-t border-gray-700">
@@ -139,7 +127,7 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
                 </Link>
               </li>
               <li>
-                <Link href="/kurumsal/iletisim" className="hover:text-[#f97316] transition-colors">
+                <Link href="/iletisim" className="hover:text-[#f97316] transition-colors">
                   İletişim
                 </Link>
               </li>
@@ -154,8 +142,8 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
                 </Link>
               </li>
               <li>
-                <Link href="/kargo-takip" className="hover:text-[#f97316] transition-colors">
-                  Kargo Takip
+                <Link href="/siparis-takip" className="hover:text-[#f97316] transition-colors">
+                  Sipariş Takibi
                 </Link>
               </li>
             </ul>
@@ -188,6 +176,41 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
             </div>
           </div>
           <div>
+            <h3 className="font-semibold mb-4">Müşteri Hizmetleri</h3>
+            <ul className="space-y-2 text-sm text-gray-300">
+              <li>
+                <Link href="/uyelik-sozlesmesi" className="hover:text-[#f97316] transition-colors">
+                  Üyelik Sözleşmesi
+                </Link>
+              </li>
+              <li>
+                <Link href="/mesafeli-satis" className="hover:text-[#f97316] transition-colors">
+                  Mesafeli Satış Sözleşmesi
+                </Link>
+              </li>
+              <li>
+                <Link href="/gizlilik" className="hover:text-[#f97316] transition-colors">
+                  Gizlilik ve Çerez Politikası
+                </Link>
+              </li>
+              <li>
+                <Link href="/iade-sartlari" className="hover:text-[#f97316] transition-colors">
+                  İptal ve İade Şartları
+                </Link>
+              </li>
+              <li>
+                <Link href="/kargo-sozlesmesi" className="hover:text-[#f97316] transition-colors">
+                  Kargo Sözleşmesi
+                </Link>
+              </li>
+              <li>
+                <Link href="/kvkk" className="hover:text-[#f97316] transition-colors">
+                  KVKK Aydınlatma Metni
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div>
             <h3 className="font-semibold mb-4">Fırsatları Kaçırmayın</h3>
             <p className="text-gray-400 text-sm mb-4">
               E-bültenimize abone olup özel indirimlerden ve kampanyalardan haberdar olun.
@@ -214,6 +237,37 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
         </div>
       </div>
 
+      {/* Popüler Kategoriler — SEO */}
+      <div className="border-t border-gray-800 bg-[#0a0f1f] py-4">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
+            <span className="text-xs text-gray-500 mr-1 shrink-0">Popüler:</span>
+            {[
+              { label: 'Karton Bardaklar', href: '#' },
+              { label: 'Double Wall (Çift Duvarlı) Bardaklar', href: '#' },
+              { label: 'PET / Plastik Soğuk İçecek Bardakları', href: '#' },
+              { label: 'Kristal Bardaklar', href: '#' },
+              { label: 'Sızdırmaz Bardak Kapakları', href: '#' },
+              { label: 'Bardak Taşıyıcılar (Viyol)', href: '#' },
+              { label: 'Pipet Çeşitleri', href: '#' },
+              { label: 'Karıştırıcılar', href: '#' },
+              { label: 'Bardak Altlıkları (Coaster)', href: '#' },
+              { label: 'Hamburger Kutuları', href: '#' },
+              { label: 'Pastane Kutuları', href: '#' },
+              { label: 'E-Ticaret Kutuları', href: '#' },
+              { label: 'Fason Üretim', href: '#' },
+            ].map((tag, i, arr) => (
+              <span key={tag.label} className="flex items-center gap-x-1">
+                <Link href={tag.href} className="text-xs text-gray-400 hover:text-[#f97316] transition-colors whitespace-nowrap">
+                  {tag.label}
+                </Link>
+                {i < arr.length - 1 && <span className="text-gray-600 text-xs select-none">|</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Alt Kısım */}
       <div className="border-t border-gray-700 bg-[#0a0f1f] py-6">
         <div className="container mx-auto px-4">
@@ -227,7 +281,7 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
               <span className="text-xs text-gray-400 mr-2">Güvenli Ödeme:</span>
               <div className="flex gap-3">
                 <div className="w-12 h-8 bg-white/10 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">iyzico</span>
+                  <span className="text-white text-xs font-bold">PayTR</span>
                 </div>
                 <div className="w-12 h-8 bg-white/10 rounded flex items-center justify-center">
                   <span className="text-white text-xs font-bold">VISA</span>
@@ -241,25 +295,6 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
               </div>
             </div>
           </div>
-          
-          {/* Hukuksal Linkler */}
-          <div className="mt-4 pt-4 border-t border-gray-600">
-            <div className="flex flex-wrap gap-4 justify-center">
-              <Link href="/hukuksal/mesafeli-satis-sozlesmesi" className="text-xs text-gray-400 hover:text-[#f97316] transition-colors">
-                Mesafeli Satış Sözleşmesi
-              </Link>
-              <Link href="/hukuksal/gizlilik-ve-guvenlik" className="text-xs text-gray-400 hover:text-[#f97316] transition-colors">
-                Gizlilik ve Güvenlik
-              </Link>
-              <Link href="/hukuksal/hizmet-ve-kullanim-sartlari" className="text-xs text-gray-400 hover:text-[#f97316] transition-colors">
-                Hizmet ve Kullanım Şartları
-              </Link>
-              <Link href="/hukuksal/iade-politikasi" className="text-xs text-gray-400 hover:text-[#f97316] transition-colors">
-                İade Politikası
-              </Link>
-            </div>
-          </div>
-
           {/* Kurumsal Giriş — gizli, sadece satıcılar için */}
           <div className="mt-6 pt-4 border-t border-gray-700/50 text-center">
             <Link

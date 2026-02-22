@@ -16,18 +16,24 @@ export async function GET() {
     return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
   }
 
-  // SupportTicket tablosundan satıcıya ait soruları getir
+  // Satıcının ürünlerini içeren siparişlere ait destek taleplerini getir
+  const vendorOrderIds = await prisma.orderItem.findMany({
+    where: { vendorId: vendor.id },
+    select: { orderId: true },
+    distinct: ['orderId'],
+  });
+  const orderIds = vendorOrderIds.map((o) => o.orderId);
+
   const questions = await prisma.supportTicket.findMany({
     where: {
-      vendorId: vendor.id,
-      // Henüz cevaplanmamış sorular (staffReply false olanlar)
-      isStaffReply: false,
+      orderId: { in: orderIds },
+      status: { in: ['OPEN', 'IN_PROGRESS'] },
     },
     take: 5,
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
-      message: true,
+      subject: true,
       createdAt: true,
       user: {
         select: {
@@ -56,7 +62,7 @@ export async function GET() {
 
     return {
       id: q.id,
-      text: q.message,
+      text: q.subject,
       date: timeAgo,
       customerName: q.user.name || q.user.email,
     };

@@ -222,6 +222,7 @@ export default function SellerNewProductPage() {
         body: JSON.stringify({
           name: form.name.trim(),
           description: form.description.trim() || undefined,
+          productType: 'READY',
           basePrice: priceNum,
           compareAtPrice: form.compareAtPrice ? parseFloat(form.compareAtPrice) : undefined,
           unitPrice: form.unitPrice ? parseFloat(form.unitPrice) : undefined,

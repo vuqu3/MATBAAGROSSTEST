@@ -20,10 +20,7 @@ export default function HakkimizdaPage() {
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900 mt-0 mb-2">Kimiz?</h2>
                   <p>
-                    MatbaaGross, Türkiye&apos;nin önde gelen matbaa ve ambalaj toptancılarından biri olarak
-                    faaliyet göstermektedir. Hazır kutu, özel üretim (fason) ve matbaa hizmetleriyle
-                    işletmelere tek noktadan çözüm sunuyoruz. Adana merkezli operasyonumuzla tüm Türkiye&apos;ye
-                    hizmet vermekteyiz.
+                    MatbaaGross, sektörün köklü ve güvenilir isimlerinden SB Ofset ve Matbaacılık güvencesiyle hayata geçirilmiş yenilikçi bir matbaa ve ambalaj platformudur. İstanbul merkezli operasyonumuzla tüm Türkiye'ye hizmet veriyoruz. İşletmelerin ihtiyaç duyduğu fason baskı, hazır kutu ve her türlü matbaa malzemesi tedariğinde kaliteli, hızlı ve tek noktadan profesyonel çözümler sunuyoruz.
                   </p>
                 </div>
               </div>
@@ -72,7 +69,7 @@ export default function HakkimizdaPage() {
               <ul className="space-y-2 text-gray-700">
                 <li>• Geniş ürün yelpazesi: Hazır kutu, özel kesim, baskı ve fason hizmetler</li>
                 <li>• Üretim öncesi grafik onayı ile hatasız teslimat</li>
-                <li>• 500 TL üzeri siparişlerde ücretsiz kargo</li>
+                <li>• 1500 TL üzeri siparişlerde ücretsiz kargo</li>
                 <li>• Kurumsal ve bireysel müşterilere uygun fiyat politikası</li>
                 <li>• Deneyimli teknik ekip ve müşteri destek hizmeti</li>
               </ul>

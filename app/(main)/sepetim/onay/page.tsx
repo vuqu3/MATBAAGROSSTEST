@@ -89,6 +89,8 @@ export default function OnayPage() {
   const [saveAddress, setSaveAddress] = useState(true);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(true);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [termsError, setTermsError] = useState(false);
 
   // Fetch user addresses from database
   useEffect(() => {
@@ -199,6 +201,11 @@ export default function OnayPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!agreedToTerms) {
+      setTermsError(true);
+      return;
+    }
+    setTermsError(false);
     if (!isAddressValid() || !isCardValid || items.length === 0) return;
 
     setLoading(true);
@@ -254,8 +261,9 @@ export default function OnayPage() {
 
         setStep('done');
 
+        const orderNo = responseData.barcode || responseData.orderNumber || responseData.id || '';
         setTimeout(() => {
-          router.push('/siparis-basarili');
+          router.push('/siparis-basarili' + (orderNo ? `?orderNo=${encodeURIComponent(orderNo)}` : ''));
         }, 800);
       } else {
         console.error('CHECKOUT_ERROR:', responseData);
@@ -691,9 +699,49 @@ export default function OnayPage() {
 
                 {/* Submit button */}
                 <div className="px-5 pb-5">
+                  {/* Yasal Onay Kutusu */}
+                  <label className="flex items-start gap-3 mb-4 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={agreedToTerms}
+                      onChange={(e) => {
+                        setAgreedToTerms(e.target.checked);
+                        if (e.target.checked) setTermsError(false);
+                      }}
+                      className="mt-0.5 w-4 h-4 flex-shrink-0 rounded border-gray-300 text-[#FF6000] focus:ring-[#FF6000] focus:ring-2 cursor-pointer"
+                    />
+                    <span className="text-xs text-gray-600 leading-relaxed">
+                      <a
+                        href="/mesafeli-satis"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#FF6000] underline underline-offset-2 hover:text-[#ea580c] transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Ön Bilgilendirme Formu
+                      </a>
+                      {"'nu ve "}
+                      <a
+                        href="/mesafeli-satis"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#FF6000] underline underline-offset-2 hover:text-[#ea580c] transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Mesafeli Satış Sözleşmesi
+                      </a>
+                      {"'ni okudum ve onaylıyorum."}
+                    </span>
+                  </label>
+                  {termsError && (
+                    <p className="text-xs text-red-600 mb-3 flex items-center gap-1.5">
+                      <span className="inline-block w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">!</span>
+                      Lütfen işleme devam etmek için sözleşmeleri onaylayın.
+                    </p>
+                  )}
                   <button
                     type="submit"
-                    disabled={loading || items.length === 0 || !isAddressValid() || !isCardValid}
+                    disabled={loading || items.length === 0 || !isAddressValid() || !isCardValid || !agreedToTerms}
                     className="w-full py-3.5 rounded-xl font-bold text-sm text-white transition-all
                       bg-gradient-to-r from-[#FF6000] to-[#ea580c]
                       hover:from-[#ea580c] hover:to-[#c2410c]

@@ -29,8 +29,6 @@ const MIDNIGHT = '#0f172a';
 const GOLD = '#d4af37';
 const GOLD_LIGHT = '#f5e6c8';
 
-const MOCK_CLIENTS = ['Restoran A', 'Otel B', 'Cafe C', 'Firma D', 'Marka E', 'Kurumsal F'];
-
 const playfair = Playfair_Display({
   subsets: ['latin'],
   display: 'swap',
@@ -56,7 +54,6 @@ export default function PremiumPage() {
     requestSummary: '',
     technicalDetails: '',
     needExpertCall: false,
-    wantFreeSample: false,
   });
 
   const user = session?.user as { name?: string | null; email?: string | null; companyName?: string | null } | undefined;
@@ -516,25 +513,6 @@ export default function PremiumPage() {
                   </p>
                 </div>
               </label>
-
-              <div className="flex items-start gap-3 p-4 rounded-xl border-2 border-amber-200 bg-amber-50/40">
-                <Package className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-slate-900">Ücretsiz Numune Gönderimi</span>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Elinizdeki ürünü bize gönderin, teknik detayları biz çıkartalım. Anlaşmalı kargolarımızla numunenizi bize ücretsiz gönderebilirsiniz.
-                  </p>
-                  <label className="mt-2 inline-flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.wantFreeSample}
-                      onChange={(e) => setForm((f) => ({ ...f, wantFreeSample: e.target.checked }))}
-                      className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                    />
-                    <span className="text-sm font-medium text-amber-700">Numune göndermek istiyorum</span>
-                  </label>
-                </div>
-              </div>
             </div>
 
             <button
@@ -547,28 +525,6 @@ export default function PremiumPage() {
           </form>
             </>
           )}
-        </div>
-      </section>
-
-      {/* Referanslar */}
-      <section className="py-16 px-4 bg-slate-100/80 border-t border-slate-200">
-        <div className="max-w-5xl mx-auto">
-          <h2
-            className={`text-2xl font-bold text-center mb-10 ${playfair.className}`}
-            style={{ color: MIDNIGHT }}
-          >
-            Bizi Tercih Edenler
-          </h2>
-          <div className="flex flex-wrap justify-center gap-8 items-center">
-            {MOCK_CLIENTS.map((name) => (
-              <div
-                key={name}
-                className="w-32 h-16 bg-slate-300/60 rounded-lg flex items-center justify-center text-slate-500 text-sm font-medium"
-              >
-                {name}
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 

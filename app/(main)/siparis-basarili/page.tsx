@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { CheckCircle, ShoppingBag, Home, Package } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export default function SiparisBasariliPage() {
-  const [orderNumber] = useState(() =>
-    'MG' + Date.now().toString().slice(-8)
-  );
+  const searchParams = useSearchParams();
+  const orderNumber = searchParams.get('orderNo') || '';
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -43,12 +43,24 @@ export default function SiparisBasariliPage() {
             <Package size={14} />
             <span className="uppercase tracking-widest font-semibold">Sipariş Numaranız</span>
           </div>
-          <div className="text-2xl font-black text-[#FF6000] tracking-widest">
-            #{orderNumber}
-          </div>
-          <p className="text-xs text-gray-400 mt-2">
-            Bu numarayı not alın. Sipariş takibinde kullanabilirsiniz.
-          </p>
+          {orderNumber ? (
+            <>
+              <div className="text-2xl font-black text-[#FF6000] tracking-widest">
+                #{orderNumber}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Bu numarayı not alın. Sipariş takibinde kullanabilirsiniz.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 mt-1">
+              Sipariş numaranızı{' '}
+              <Link href="/hesabim/siparisler" className="text-[#FF6000] underline underline-offset-2 hover:text-[#ea580c]">
+                siparişleriniz
+              </Link>{' '}
+              sayfasından kontrol edebilirsiniz.
+            </p>
+          )}
         </div>
 
         {/* Info boxes */}
