@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Package, ChevronDown, MapPin, ChevronLeft, ChevronRight, Download, Barcode as BarcodeIcon, Scan } from 'lucide-react';
+import { Package, ChevronDown, MapPin, ChevronLeft, ChevronRight, Download, Barcode as BarcodeIcon, Scan, FileText } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const PAGE_SIZE = 10;
@@ -40,6 +40,7 @@ type Order = {
   status: string;
   paymentStatus: string;
   createdAt: string;
+  invoiceUrl?: string | null;
   user?: User;
   address: Address;
   items: OrderItem[];
@@ -350,6 +351,23 @@ export default function AdminOrdersPage() {
                                   </tbody>
                                 </table>
                               </div>
+                              {/* Fatura */}
+                              {order.invoiceUrl && (
+                                <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                                  <FileText size={14} className="text-emerald-600 shrink-0" />
+                                  <span className="text-xs text-emerald-700 font-medium">Satıcı Faturası:</span>
+                                  <a
+                                    href={order.invoiceUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs text-emerald-700 hover:text-emerald-900 underline"
+                                  >
+                                    <Download size={12} />
+                                    PDF İndir
+                                  </a>
+                                </div>
+                              )}
+
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs font-medium text-gray-700">Durum güncelle:</span>
                                 {(['PENDING', 'PROCESSING', 'SHIPPED', 'COMPLETED'] as const).map((s) => (

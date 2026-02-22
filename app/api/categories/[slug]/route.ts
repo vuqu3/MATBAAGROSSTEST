@@ -12,7 +12,14 @@ export async function GET(
       where: { slug },
       include: {
         products: {
-          where: { isPublished: true, isActive: true },
+          where: {
+            isPublished: true,
+            isActive: true,
+            OR: [
+              { vendorId: null },
+              { vendor: { isBlocked: false } },
+            ],
+          },
           orderBy: { createdAt: 'desc' },
         },
       },

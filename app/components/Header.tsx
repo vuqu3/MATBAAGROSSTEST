@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, ShoppingCart, User, Truck, Crown, Factory, Store, ShieldCheck, LogOut, Menu, X } from 'lucide-react';
+import { Search, ShoppingCart, User, Truck, Crown, Factory, LogOut, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
@@ -39,9 +39,6 @@ export default function Header() {
   const { items: cartItems } = useCart();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuLoading, setMenuLoading] = useState(true);
-  const isCustomer = status === 'authenticated' && session?.user?.role === 'USER';
-  const isAdmin = status === 'authenticated' && session?.user?.role === 'ADMIN';
-  const isSeller = status === 'authenticated' && session?.user?.role === 'SELLER';
   const cartCount = cartItems.length;
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -74,10 +71,10 @@ export default function Header() {
           data.map((c) => ({
             id: c.id,
             name: c.name,
-            link: `/kategori/${c.slug}`,
+            link: `/urunler?kategori=${c.slug}`,
             subCategories: (c.children || []).map((ch) => ({
               name: ch.name,
-              link: `/kategori/${ch.slug}`,
+              link: `/urunler?kategori=${ch.slug}`,
             })),
           }))
         );
@@ -136,16 +133,18 @@ export default function Header() {
 
       {/* Ana Header */}
       <div className="container mx-auto px-4 py-2">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(true)}
-              className="md:hidden inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-gray-200 text-[#484848] hover:bg-gray-50"
-              aria-label="Menüyü aç"
-            >
-              <Menu size={22} />
-            </button>
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+          <div className="flex items-center gap-2 md:flex-shrink-0">
+            {session?.user?.role !== 'SELLER' && (
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                className="md:hidden inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-gray-200 text-[#484848] hover:bg-gray-50"
+                aria-label="Menüyü aç"
+              >
+                <Menu size={22} />
+              </button>
+            )}
 
             {/* Logo */}
             <Link href="/" className="flex-1 md:flex-none md:flex-shrink-0 flex justify-center md:justify-start">
@@ -160,84 +159,10 @@ export default function Header() {
                 />
               </div>
             </Link>
-
-            {/* Kullanıcı Alanı */}
-            <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
-            {session && status === 'authenticated' ? (
-              <div className="relative" ref={accountRef}>
-                <button
-                  type="button"
-                  onClick={() => setAccountOpen((o) => !o)}
-                  className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-[#FF6000] transition-colors"
-                >
-                  <User size={20} />
-                  <span className="hidden lg:inline text-[10px] font-medium">
-                    {isAdmin ? 'Yönetim' : isSeller ? 'Mağaza' : 'Hesabım'}
-                  </span>
-                </button>
-                {accountOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-gray-200 bg-white py-2 shadow-lg z-50">
-                    <Link
-                      href={isAdmin ? '/admin' : isSeller ? '/seller-dashboard' : '/hesabim'}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      onClick={() => setAccountOpen(false)}
-                    >
-                      <User size={16} />
-                      {isAdmin ? 'Yönetim Paneli' : isSeller ? 'Satıcı Paneli' : 'Hesabım'}
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => { signOut({ callbackUrl: '/' }); setAccountOpen(false); }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <LogOut size={16} />
-                      Çıkış Yap
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : status !== 'loading' ? (
-              <>
-                <Link
-                  href="/login?callbackUrl=/admin"
-                  className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-red-600 transition-colors"
-                >
-                  <ShieldCheck size={20} />
-                  <span className="hidden lg:inline text-[10px] font-medium">Yönetim</span>
-                </Link>
-                <Link
-                  href="/login?callbackUrl=/seller-dashboard&loginType=seller"
-                  className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-orange-600 transition-colors"
-                >
-                  <Store size={20} />
-                  <span className="hidden lg:inline text-[10px] font-medium">Mağaza Girişi</span>
-                </Link>
-                <Link
-                  href="/login"
-                  className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-blue-600 transition-colors"
-                >
-                  <User size={20} />
-                  <span className="hidden lg:inline text-[10px] font-medium">Giriş Yap</span>
-                </Link>
-              </>
-            ) : null}
-            <Link
-              href="/sepetim"
-              className="relative flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-[#FF6000] transition-colors"
-            >
-              <ShoppingCart size={20} className="text-[#FF6000]" />
-              <span className="hidden lg:inline text-[10px] font-medium">Sepetim</span>
-              {cartCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-[#FF6000] text-white text-xs font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center leading-none">
-                  {cartCount > 99 ? '99+' : cartCount}
-                </span>
-              )}
-            </Link>
-          </div>
           </div>
 
           {/* Arama Çubuğu */}
-          <div className="w-full flex-1 max-w-4xl md:mx-auto">
+          <div className="w-full md:flex-1 md:max-w-4xl md:mx-auto">
             <form className="flex">
               <div className="relative flex-1">
                 <input
@@ -255,11 +180,71 @@ export default function Header() {
               </button>
             </form>
           </div>
+
+          {/* Kullanıcı Alanı */}
+          <div className="flex items-center justify-end gap-1.5 md:gap-4 flex-shrink-0">
+            {session && status === 'authenticated' ? (
+              <div className="relative" ref={accountRef}>
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen((o) => !o)}
+                  className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-[#FF6000] transition-colors"
+                >
+                  <User size={20} />
+                  <span className="hidden lg:inline text-[10px] font-medium">
+                    Hesabım
+                  </span>
+                </button>
+                {accountOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-gray-200 bg-white py-2 shadow-lg z-50">
+                    <Link
+                      href={'/hesabim'}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => setAccountOpen(false)}
+                    >
+                      <User size={16} />
+                      Hesabım
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => { signOut({ callbackUrl: '/' }); setAccountOpen(false); }}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <LogOut size={16} />
+                      Çıkış Yap
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : status !== 'loading' ? (
+              <Link
+                href="/login"
+                className="flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-blue-600 transition-colors"
+              >
+                <User size={20} />
+                <span className="hidden lg:inline text-[10px] font-medium">Giriş Yap</span>
+              </Link>
+            ) : null}
+            {session?.user?.role !== 'SELLER' && (
+              <Link
+                href="/sepetim"
+                className="relative flex flex-col items-center justify-center min-h-11 min-w-11 md:min-h-0 md:min-w-0 gap-0.5 px-2 py-1.5 text-[#484848] hover:text-[#FF6000] transition-colors"
+              >
+                <ShoppingCart size={20} className="text-[#FF6000]" />
+                <span className="hidden lg:inline text-[10px] font-medium">Sepetim</span>
+                {cartCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-[#FF6000] text-white text-xs font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center leading-none">
+                    {cartCount > 99 ? '99+' : cartCount}
+                  </span>
+                )}
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Mega Menü - Dinamik (Admin panelinden yönetilen kategoriler) */}
-      {(menuItems.length > 0 || menuLoading) && (
+      {(menuItems.length > 0 || menuLoading) && session?.user?.role !== 'SELLER' && (
         <nav className="bg-white border-t border-gray-200 relative overflow-visible hidden md:block">
           <div className="w-full px-4 max-w-[1440px] mx-auto">
             <ul className="flex items-center justify-between gap-4 whitespace-nowrap overflow-visible">
@@ -320,7 +305,7 @@ export default function Header() {
         </nav>
       )}
 
-      {mobileMenuOpen && (
+      {mobileMenuOpen && session?.user?.role !== 'SELLER' && (
         <div className="md:hidden fixed inset-0 z-[9999]">
           <button
             type="button"

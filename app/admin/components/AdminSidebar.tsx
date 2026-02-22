@@ -50,6 +50,7 @@ const navGroups: NavGroup[] = [
     icon: Store,
     children: [
       { label: 'Satıcı Listesi', href: '/admin/vendors' },
+      { label: 'Başvurular', href: '/admin/supplier-applications' },
       { label: 'Komisyon Raporları', href: '/admin/finance' },
       { label: 'Mutabakat', href: '/admin/reconciliation' },
     ],

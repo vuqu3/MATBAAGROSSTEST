@@ -58,6 +58,11 @@ const productSchema = z.object({
   supplier: z.string().optional(),
   minOrderQuantity: z.number().optional(),
   productionDays: z.number().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  depth: z.number().optional(),
+  weight: z.number().optional(),
+  desi: z.number().optional(),
   dynamicAttributes: z.record(z.string(), z.any()).optional(),
 });
 
@@ -527,6 +532,80 @@ export default function NewProductPage() {
                 </div>
               </div>
             )}
+
+            {/* Kargo & Teslimat Ölçüleri */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Kargo & Teslimat Ölçüleri</h3>
+              <p className="text-sm text-gray-500 mb-4">Paketlenmiş/Kargoya hazır ölçüleri giriniz.</p>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    En (cm)
+                  </label>
+                  <input
+                    {...register('width', { valueAsNumber: true })}
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#FF6000]"
+                    placeholder="0.0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Boy (cm)
+                  </label>
+                  <input
+                    {...register('depth', { valueAsNumber: true })}
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#FF6000]"
+                    placeholder="0.0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Yükseklik (cm)
+                  </label>
+                  <input
+                    {...register('height', { valueAsNumber: true })}
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#FF6000]"
+                    placeholder="0.0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ağırlık (kg)
+                  </label>
+                  <input
+                    {...register('weight', { valueAsNumber: true })}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#FF6000]"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Desi
+                </label>
+                <input
+                  {...register('desi', { valueAsNumber: true })}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#FF6000]"
+                  placeholder="Otomatik hesaplanır"
+                />
+                <p className="mt-1 text-xs text-gray-500">Desi = (En × Boy × Yükseklik) / 3000</p>
+              </div>
+            </div>
           </div>
         )}
 

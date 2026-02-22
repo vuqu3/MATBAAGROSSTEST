@@ -46,18 +46,18 @@ export async function getAllHeroWidgets(): Promise<ReturnType<typeof rowToWidget
 }
 
 const DEFAULT_WIDGETS = [
-  { title: 'Ramazan', subtitle: 'İmsakiye & Kutu', targetUrl: '/kampanyalar', order: 1 },
-  { title: 'Acil', subtitle: 'Baskıya Başla', targetUrl: '/kategori', order: 2 },
-  { title: 'Tasarım', subtitle: 'Profesyonel Destek', targetUrl: '/kurumsal', order: 3 },
-  { title: 'Kargo', subtitle: 'Bedava Gönderim', targetUrl: '/', order: 4 },
-  { title: 'Yeni', subtitle: 'Keşfet', targetUrl: '/kategori', order: 5 },
-  { title: 'Kurumsal', subtitle: 'Acil Baskı', targetUrl: '/kurumsal', order: 6 },
-  { title: 'Toptan', subtitle: 'Büyük Parti', targetUrl: '/kategori', order: 7 },
-  { title: 'Fason', subtitle: 'Kesim & Üretim', targetUrl: '/fason-hizmetler', order: 8 },
-  { title: 'Promosyon', subtitle: 'Logo Baskılı', targetUrl: '/kampanyalar', order: 9 },
-  { title: 'Ambalaj', subtitle: '%30 İndirim', targetUrl: '/ambalaj', order: 10 },
-  { title: 'Kampanya 11', subtitle: 'Boş Widget', targetUrl: '/kampanyalar', order: 11 },
-  { title: 'Kampanya 12', subtitle: 'Boş Widget', targetUrl: '/kampanyalar', order: 12 },
+  { title: 'İNDİRİMLİ', subtitle: 'ÜRÜNLER', targetUrl: '/urunler?kategori=50-indirimli-urunler', order: 1 },
+  { title: 'STOKTAN', subtitle: 'HEMEN TESLİM', targetUrl: '/urunler?kategori=stoktan-hemen-teslim', order: 2 },
+  { title: 'HAZIR', subtitle: 'KUTULAR', targetUrl: '/urunler?kategori=hazir-kutular', order: 3 },
+  { title: 'AMBALAJ', subtitle: 'GROSS', targetUrl: '/urunler?kategori=ambalaj-gross', order: 4 },
+  { title: 'PERAKENDE', subtitle: 'SATIŞ', targetUrl: '/urunler?kategori=perakende', order: 5 },
+  { title: 'KARTON', subtitle: 'BARDAK', targetUrl: '/urunler?kategori=karton-bardak', order: 6 },
+  { title: 'HAMBURGER', subtitle: 'KUTUSU', targetUrl: '/urunler?kategori=hamburger-kutusu', order: 7 },
+  { title: 'PASTANE', subtitle: 'KUTULARI', targetUrl: '/urunler?kategori=pastane-kutulari', order: 8 },
+  { title: 'E-TİCARET', subtitle: 'KUTUSU', targetUrl: '/urunler?kategori=e-ticaret-kutusu', order: 9 },
+  { title: 'PROMOSYON', subtitle: 'ÜRÜNLER', targetUrl: '/urunler?kategori=promosyon', order: 10 },
+  { title: 'OUTLET', subtitle: '%50 İNDİRİM', targetUrl: '/urunler?kategori=50-indirimli-urunler', order: 11 },
+  { title: 'YENİ', subtitle: 'GELENLER', targetUrl: '/urunler?kategori=yeni-gelenler', order: 12 },
 ];
 
 function simpleId(): string {

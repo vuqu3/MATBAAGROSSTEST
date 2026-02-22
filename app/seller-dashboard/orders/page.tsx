@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Printer } from 'lucide-react';
+import { Printer, Upload, FileText, CheckCircle, X } from 'lucide-react';
 
 type OrderItemType = {
   id: string;
@@ -18,6 +18,7 @@ type OrderType = {
   barcode: string | null;
   status: string;
   createdAt: string;
+  invoiceUrl: string | null;
   orderItems: OrderItemType[];
   address: { city: string; line1: string; title?: string | null };
   user: { name: string | null; email: string | null };
@@ -28,6 +29,37 @@ export default function SellerOrdersPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccessId, setUploadSuccessId] = useState<string | null>(null);
+
+  const handleInvoiceUpload = async (orderId: string, file: File) => {
+    setUploadingId(orderId);
+    setUploadError(null);
+    setUploadSuccessId(null);
+    const form = new FormData();
+    form.append('invoice', file);
+    try {
+      const res = await fetch(`/api/seller/orders/${orderId}/invoice`, {
+        method: 'POST',
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUploadError(data.error ?? 'Yükleme başarısız.');
+        return;
+      }
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, invoiceUrl: data.invoiceUrl } : o))
+      );
+      setUploadSuccessId(orderId);
+      setTimeout(() => setUploadSuccessId(null), 3000);
+    } catch {
+      setUploadError('Bir hata oluştu.');
+    } finally {
+      setUploadingId(null);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -174,13 +206,78 @@ export default function SellerOrdersPage() {
                 </ul>
               </div>
 
-              {/* Kart Altı - Toplam */}
-              <div className="flex justify-end border-t border-gray-100 bg-gray-50/50 px-4 py-3">
-                <span className="text-sm text-gray-500 mr-2">Toplam (sizin ürünleriniz):</span>
-                <span className="text-base font-semibold text-gray-900">
-                  {formatTRY(orderTotal)}
-                </span>
+              {/* Kart Altı - Toplam + Fatura */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/50 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Toplam (sizin ürünleriniz):</span>
+                  <span className="text-base font-semibold text-gray-900">{formatTRY(orderTotal)}</span>
+                </div>
+
+                {/* Fatura Yükle / Görüntüle */}
+                <div className="flex items-center gap-2">
+                  {order.invoiceUrl ? (
+                    <>
+                      <a
+                        href={order.invoiceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+                      >
+                        <FileText size={13} />
+                        Fatura Yüklendi
+                      </a>
+                      <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                        <Upload size={13} />
+                        Değiştir
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleInvoiceUpload(order.id, f);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <label className={`inline-flex items-center gap-1.5 cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      uploadingId === order.id
+                        ? 'border-gray-200 bg-gray-100 text-gray-400 pointer-events-none'
+                        : uploadSuccessId === order.id
+                          ? 'border-green-300 bg-green-50 text-green-700'
+                          : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                    }`}>
+                      {uploadingId === order.id ? (
+                        <><Upload size={13} className="animate-pulse" />Yükleniyor...</>
+                      ) : uploadSuccessId === order.id ? (
+                        <><CheckCircle size={13} />Yüklendi!</>
+                      ) : (
+                        <><Upload size={13} />Fatura Yükle (PDF)</>
+                      )}
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleInvoiceUpload(order.id, f);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
+
+              {/* Upload error */}
+              {uploadError && uploadingId === null && (
+                <div className="flex items-center justify-between px-4 py-2 bg-red-50 border-t border-red-100 text-xs text-red-600">
+                  {uploadError}
+                  <button onClick={() => setUploadError(null)}><X size={12} /></button>
+                </div>
+              )}
             </div>
           );
         })}

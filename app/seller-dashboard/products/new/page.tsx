@@ -4,12 +4,18 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AlertCircle, Upload, Loader2, X } from 'lucide-react';
+import { AlertCircle, Upload, Loader2, X, Plus, Trash2 } from 'lucide-react';
 
 const MAX_IMAGES = 5;
 type ImageItem = File | string; // string = URL (mevcut yükleme)
 
-type Category = { id: string; name: string; slug: string; parentId: string | null };
+type Category = { id: string; name: string; slug: string; parentId: string | null; order: number };
+
+interface CategoryNode extends Category {
+  children: CategoryNode[];
+  level: number;
+  path: string; // Full path for breadcrumb display
+}
 
 function FilePreviewThumb({ file }: { file: File }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -25,6 +31,7 @@ function FilePreviewThumb({ file }: { file: File }) {
 export default function SellerNewProductPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryTree, setCategoryTree] = useState<CategoryNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -32,26 +39,140 @@ export default function SellerNewProductPage() {
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<ImageItem[]>([]);
+
+  type VariantRow = { id: string; name: string; price: string; stock: string };
+  const [variants, setVariants] = useState<VariantRow[]>([]);
+
+  const addVariant = () =>
+    setVariants((v) => [...v, { id: crypto.randomUUID(), name: '', price: '', stock: '' }]);
+
+  const removeVariant = (id: string) =>
+    setVariants((v) => v.filter((r) => r.id !== id));
+
+  const updateVariant = (id: string, field: keyof Omit<VariantRow, 'id'>, value: string) =>
+    setVariants((v) => v.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   const [form, setForm] = useState({
     name: '',
     description: '',
     price: '',
+    compareAtPrice: '',
+    unitPrice: '',
     stock: '0',
     categoryId: '',
+    width: '',
+    height: '',
+    depth: '',
+    weight: '',
+    desi: '',
   });
+
+  // Build hierarchical tree structure from flat categories
+  const buildCategoryTree = (flatCategories: Category[]): CategoryNode[] => {
+    const categoryMap = new Map<string, CategoryNode>();
+    const rootCategories: CategoryNode[] = [];
+
+    // Create map of all categories
+    flatCategories.forEach(category => {
+      categoryMap.set(category.id, {
+        ...category,
+        children: [],
+        level: 0,
+        path: category.name,
+      });
+    });
+
+    // Build tree structure and calculate paths
+    flatCategories.forEach(category => {
+      const node = categoryMap.get(category.id)!;
+      
+      if (category.parentId) {
+        const parent = categoryMap.get(category.parentId);
+        if (parent) {
+          node.level = parent.level + 1;
+          node.path = `${parent.path} > ${category.name}`;
+          parent.children.push(node);
+        }
+      } else {
+        rootCategories.push(node);
+      }
+    });
+
+    // Sort categories by order, then by name
+    const sortCategories = (nodes: CategoryNode[]): CategoryNode[] => {
+      return nodes.sort((a, b) => {
+        if (a.order !== b.order) {
+          return a.order - b.order;
+        }
+        return a.name.localeCompare(b.name, 'tr');
+      }).map(node => ({
+        ...node,
+        children: sortCategories(node.children)
+      }));
+    };
+
+    return sortCategories(rootCategories);
+  };
+
+  // Flatten tree for select options with proper formatting
+  const flattenCategoriesForSelect = (nodes: CategoryNode[]): Array<{id: string, name: string, isLeaf: boolean}> => {
+    const result: Array<{id: string, name: string, isLeaf: boolean}> = [];
+    
+    const flatten = (nodeList: CategoryNode[]) => {
+      nodeList.forEach(node => {
+        // Add current category
+        result.push({
+          id: node.id,
+          name: node.path,
+          isLeaf: node.children.length === 0
+        });
+        
+        // Add children
+        if (node.children.length > 0) {
+          flatten(node.children);
+        }
+      });
+    };
+    
+    flatten(nodes);
+    return result;
+  };
 
   useEffect(() => {
     fetch('/api/seller/categories')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        setCategories(Array.isArray(data) ? data : []);
-        if (data?.length && !form.categoryId) {
-          setForm((f) => ({ ...f, categoryId: data[0].id }));
+        const categoriesArray = Array.isArray(data) ? data : [];
+        setCategories(categoriesArray);
+        
+        // Build hierarchical tree
+        const tree = buildCategoryTree(categoriesArray);
+        setCategoryTree(tree);
+        
+        // Set default category to first leaf category (deepest level)
+        const flattenedOptions = flattenCategoriesForSelect(tree);
+        const firstLeaf = flattenedOptions.find(option => option.isLeaf);
+        if (firstLeaf && !form.categoryId) {
+          setForm((f) => ({ ...f, categoryId: firstLeaf.id }));
         }
+        
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
+
+  // Auto-calculate desi when dimensions change
+  useEffect(() => {
+    const width = parseFloat(form.width) || 0;
+    const height = parseFloat(form.height) || 0;
+    const depth = parseFloat(form.depth) || 0;
+    
+    if (width > 0 && height > 0 && depth > 0) {
+      const calculatedDesi = (width * height * depth) / 3000;
+      setForm((f) => ({ ...f, desi: calculatedDesi.toFixed(2) }));
+    } else {
+      setForm((f) => ({ ...f, desi: '' }));
+    }
+  }, [form.width, form.height, form.depth]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,10 +223,24 @@ export default function SellerNewProductPage() {
           name: form.name.trim(),
           description: form.description.trim() || undefined,
           basePrice: priceNum,
+          compareAtPrice: form.compareAtPrice ? parseFloat(form.compareAtPrice) : undefined,
+          unitPrice: form.unitPrice ? parseFloat(form.unitPrice) : undefined,
           stock: Math.max(0, parseInt(form.stock, 10) || 0),
           categoryId: form.categoryId,
           imageUrl: uploadedUrls[0] || undefined,
           images: uploadedUrls.length > 0 ? uploadedUrls : undefined,
+          width: form.width ? parseFloat(form.width) : undefined,
+          height: form.height ? parseFloat(form.height) : undefined,
+          depth: form.depth ? parseFloat(form.depth) : undefined,
+          weight: form.weight ? parseFloat(form.weight) : undefined,
+          desi: form.desi ? parseFloat(form.desi) : undefined,
+          variants: variants
+            .filter((v) => v.name.trim() && v.price)
+            .map((v) => ({
+              name: v.name.trim(),
+              price: parseFloat(v.price),
+              stock: Math.max(0, parseInt(v.stock, 10) || 0),
+            })),
         }),
       });
 
@@ -123,6 +258,51 @@ export default function SellerNewProductPage() {
       setError('Bağlantı hatası. Lütfen tekrar deneyin.');
       setSubmitting(false);
     }
+  };
+
+  // Render category options with hierarchical structure
+  const renderCategoryOptions = (nodes: CategoryNode[]): React.ReactElement[] => {
+    const options: React.ReactElement[] = [];
+    
+    nodes.forEach(node => {
+      if (node.children.length === 0) {
+        // Leaf category - directly add as option
+        options.push(
+          <option key={node.id} value={node.id}>
+            {node.path}
+          </option>
+        );
+      } else {
+        // Parent category - create optgroup
+        const childOptions = renderCategoryOptions(node.children);
+        if (childOptions.length > 0) {
+          options.push(
+            <optgroup key={node.id} label={node.name}>
+              {childOptions}
+            </optgroup>
+          );
+        }
+      }
+    });
+    
+    return options;
+  };
+
+  // Alternative: Render with breadcrumb style (fallback for browsers that don't support optgroup well)
+  const renderBreadcrumbOptions = (): React.ReactElement[] => {
+    const flattenedOptions = flattenCategoriesForSelect(categoryTree);
+    
+    return flattenedOptions.map(option => (
+      <option 
+        key={option.id} 
+        value={option.id}
+        // Disable parent categories (non-leaf nodes) to enforce selection of deepest categories
+        disabled={!option.isLeaf}
+        className={!option.isLeaf ? 'text-gray-400' : ''}
+      >
+        {option.name}
+      </option>
+    ));
   };
 
   const currentCount = images.length;
@@ -249,7 +429,7 @@ export default function SellerNewProductPage() {
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
-                Fiyat (TL) *
+                Satış Fiyatı (TL) *
               </label>
               <input
                 id="price"
@@ -260,8 +440,41 @@ export default function SellerNewProductPage() {
                 onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
                 required
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                placeholder="0.00"
+                placeholder="0.00 (KDV Dahil)"
               />
+              <p className="mt-1 text-xs text-gray-500">Lütfen KDV dahil son satış fiyatını giriniz.</p>
+            </div>
+            <div>
+              <label htmlFor="compareAtPrice" className="block text-sm font-medium text-gray-700 mb-1">
+                Piyasa Fiyatı (İndirimsiz Hali)
+              </label>
+              <input
+                id="compareAtPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.compareAtPrice}
+                onChange={(e) => setForm((f) => ({ ...f, compareAtPrice: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                placeholder="0.00 (İsteğe bağlı)"
+              />
+              <p className="mt-1 text-xs text-gray-500">Satış fiyatından yüksek girerseniz indirim olarak gösterilir.</p>
+            </div>
+            <div>
+              <label htmlFor="unitPrice" className="block text-sm font-medium text-gray-700 mb-1">
+                Referans Birim Fiyatı (1 Adet İçin)
+              </label>
+              <input
+                id="unitPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.unitPrice}
+                onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                placeholder="0.00 (İsteğe bağlı)"
+              />
+              <p className="mt-1 text-xs text-gray-500">İndirim rozetlerinin hesaplanması için 1 adet ürünün piyasa fiyatını girin (Örn: 5 TL).</p>
             </div>
             <div>
               <label htmlFor="stock" className="block text-sm font-medium text-gray-700 mb-1">
@@ -279,6 +492,90 @@ export default function SellerNewProductPage() {
             </div>
           </div>
 
+          {/* Kargo & Teslimat Ölçüleri */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">Kargo & Teslimat Ölçüleri</h3>
+            <p className="text-sm text-gray-500 mb-4">Paketlenmiş/Kargoya hazır ölçüleri giriniz.</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label htmlFor="width" className="block text-sm font-medium text-gray-700 mb-1">
+                  En (cm)
+                </label>
+                <input
+                  id="width"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.width}
+                  onChange={(e) => setForm((f) => ({ ...f, width: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  placeholder="0.0"
+                />
+              </div>
+              <div>
+                <label htmlFor="depth" className="block text-sm font-medium text-gray-700 mb-1">
+                  Boy (cm)
+                </label>
+                <input
+                  id="depth"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.depth}
+                  onChange={(e) => setForm((f) => ({ ...f, depth: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  placeholder="0.0"
+                />
+              </div>
+              <div>
+                <label htmlFor="height" className="block text-sm font-medium text-gray-700 mb-1">
+                  Yükseklik (cm)
+                </label>
+                <input
+                  id="height"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.height}
+                  onChange={(e) => setForm((f) => ({ ...f, height: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  placeholder="0.0"
+                />
+              </div>
+              <div>
+                <label htmlFor="weight" className="block text-sm font-medium text-gray-700 mb-1">
+                  Ağırlık (kg)
+                </label>
+                <input
+                  id="weight"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.weight}
+                  onChange={(e) => setForm((f) => ({ ...f, weight: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            <div className="mt-4">
+              <label htmlFor="desi" className="block text-sm font-medium text-gray-700 mb-1">
+                Desi
+              </label>
+              <input
+                id="desi"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.desi}
+                readOnly
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-600 bg-gray-50 cursor-not-allowed"
+                placeholder="Otomatik hesaplanır"
+              />
+              <p className="mt-1 text-xs text-gray-500">Desi = (En × Boy × Yükseklik) / 3000</p>
+            </div>
+          </div>
+
           <div>
             <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
               Kategori *
@@ -291,12 +588,11 @@ export default function SellerNewProductPage() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
             >
               <option value="">Kategori seçin</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.parentId ? `  ${c.name}` : c.name}
-                </option>
-              ))}
+              {categoryTree.length > 0 ? renderCategoryOptions(categoryTree) : renderBreadcrumbOptions()}
             </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Lütfen ürününüz için en uygun alt kategoriyi seçin. Ana kategoriler ürün eklemek için uygun değildir.
+            </p>
           </div>
 
           <div>
@@ -367,6 +663,84 @@ export default function SellerNewProductPage() {
                     >
                       <X className="h-4 w-4" />
                     </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Varyasyonlar */}
+          <div className="border border-gray-200 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-semibold text-gray-800">Seçenekler / Varyasyonlar</h3>
+                <p className="text-xs text-gray-500 mt-0.5">İsteğe bağlı — Miktara göre farklı fiyat sunmak için ekleyin (örn: 25 Adet, 100 Adet)</p>
+              </div>
+              <button
+                type="button"
+                onClick={addVariant}
+                className="flex items-center gap-1.5 text-sm font-medium text-[#FF6000] hover:text-[#e55a00] border border-[#FF6000] hover:border-[#e55a00] px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Seçenek Ekle
+              </button>
+            </div>
+
+            {variants.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">
+                Henüz seçenek eklenmedi. Seçenek eklemezseniz ürün tek fiyatla listelenir.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {/* Header */}
+                <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-1">
+                  <div className="col-span-5">Seçenek Adı</div>
+                  <div className="col-span-3">Fiyat (TL)</div>
+                  <div className="col-span-3">Stok</div>
+                  <div className="col-span-1"></div>
+                </div>
+                {variants.map((row) => (
+                  <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-5">
+                      <input
+                        type="text"
+                        value={row.name}
+                        onChange={(e) => updateVariant(row.id, 'name', e.target.value)}
+                        placeholder="örn: 100 Adet"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.price}
+                        onChange={(e) => updateVariant(row.id, 'price', e.target.value)}
+                        placeholder="0.00"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.stock}
+                        onChange={(e) => updateVariant(row.id, 'stock', e.target.value)}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      />
+                    </div>
+                    <div className="col-span-1 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => removeVariant(row.id)}
+                        className="text-red-400 hover:text-red-600 transition-colors"
+                        aria-label="Seçeneği sil"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, CalendarDays, Clock, FileText, Package, X } from 'lucide-react';
-import { useOffers } from '@/context/OffersContext';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useSession } from 'next-auth/react';
 
 function formatRemaining(expiresAt: string) {
   const end = new Date(expiresAt).getTime();
@@ -15,13 +15,62 @@ function formatRemaining(expiresAt: string) {
 }
 
 export default function TeklifHavuzuPage() {
-  const { requests, quotes, addQuote } = useOffers();
   const router = useRouter();
+  const { data: session } = useSession();
   const COMMISSION_RATE = 0.1;
   const [openRequestNo, setOpenRequestNo] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState<string>('');
   const [deliveryDaysInput, setDeliveryDaysInput] = useState<string>('');
   const [sellerNote, setSellerNote] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [quotes, setQuotes] = useState<any[]>([]);
+
+  // Mevcut satıcının vendorId'si (session'dan gelecek)
+  const currentVendorId = session?.user?.id;
+
+  // Verileri yükle
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const res = await fetch('/api/seller/quotes');
+        if (res.ok) {
+          const data = await res.json();
+          setRequests(data.requests || []);
+          setQuotes(data.quotes || []);
+        }
+      } catch (error) {
+        console.error('Error loading quotes:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (currentVendorId) {
+      loadData();
+    }
+  }, [currentVendorId]);
+
+  // Teklif ekleme fonksiyonu
+  const addQuote = async (quoteData: any) => {
+    try {
+      const res = await fetch('/api/seller/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(quoteData),
+      });
+      if (res.ok) {
+        const newQuote = await res.json();
+        setQuotes(prev => [newQuote, ...prev]);
+        // Request listesini güncelle
+        setRequests(prev => prev.map(r => 
+          r.id === quoteData.requestId ? { ...r, hasQuoted: true } : r
+        ));
+      }
+    } catch (error) {
+      console.error('Error adding quote:', error);
+    }
+  };
 
   const rows = useMemo(() => {
     return requests.map((r) => ({
@@ -67,6 +116,14 @@ export default function TeklifHavuzuPage() {
     if (!numericPrice) return null;
     return Math.round(numericPrice * (1 + COMMISSION_RATE));
   }, [numericPrice]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-gray-500">Yükleniyor...</div>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -186,7 +243,7 @@ export default function TeklifHavuzuPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end">
-                        {quotes.some((q) => q.requestNo === r.requestNo && q.partnerLabel === 'Benim Teklifim') ? (
+                        {r.hasQuoted ? (
                           <button
                             type="button"
                             className="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-orange-700 font-semibold hover:bg-orange-100 transition-colors"
@@ -407,13 +464,10 @@ export default function TeklifHavuzuPage() {
                             if (!numericPrice) return;
                             if (!numericDeliveryDays) return;
                             addQuote({
-                              requestNo: selectedRequest.requestNo,
-                              partnerLabel: 'Benim Teklifim',
+                              requestId: selectedRequest.id,
                               price: numericPrice,
                               deliveryDays: numericDeliveryDays,
                               sellerNote: sellerNote.trim() ? sellerNote.trim() : undefined,
-                              supplierScore: 8.5,
-                              status: 'OFFER_RECEIVED',
                             });
                             setOpenRequestNo(null);
                           }}

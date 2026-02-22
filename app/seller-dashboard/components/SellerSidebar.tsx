@@ -12,15 +12,17 @@ import {
   MessageCircle,
   Settings,
   ChevronLeft,
+  Sparkles,
 } from 'lucide-react';
 
-const mainNavItems: { label: string; href: string; icon: React.ElementType }[] = [
+const mainNavItems: { label: string; href: string; icon: React.ElementType; isPrime?: boolean }[] = [
   { label: 'Özet', href: '/seller-dashboard/overview', icon: LayoutDashboard },
   { label: 'Ürünlerim', href: '/seller-dashboard/products', icon: Package },
   { label: 'Siparişler', href: '/seller-dashboard/orders', icon: ShoppingCart },
   { label: 'Teklif Havuzu', href: '/seller-dashboard/teklif-havuzu', icon: Inbox },
   { label: 'Verilen Teklifler', href: '/seller-dashboard/verilen-teklifler', icon: Send },
   { label: 'Müşteri Soruları', href: '/seller-dashboard/questions', icon: MessageCircle },
+  { label: 'Makine İlanı Ver', href: '/seller-dashboard/makine-ilani-ver', icon: Sparkles, isPrime: true },
   { label: 'Mağaza Ayarları', href: '/seller-dashboard/settings', icon: Settings },
 ];
 
@@ -82,13 +84,17 @@ export default function SellerSidebar({
                 <Link
                   href={item.href}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors border-l-4 ${
-                    active
-                      ? 'bg-orange-50 text-orange-600 border-orange-600'
-                      : 'border-transparent text-gray-600 hover:bg-orange-50 hover:text-orange-600'
+                    item.isPrime
+                      ? active
+                        ? 'bg-gradient-to-r from-[#D4AF37] to-[#B8941F] text-white border-[#D4AF37]'
+                        : 'border-transparent text-[#D4AF37] hover:bg-gradient-to-r hover:from-[#D4AF37]/10 hover:to-[#B8941F]/10'
+                      : active
+                        ? 'bg-orange-50 text-orange-600 border-orange-600'
+                        : 'border-transparent text-gray-600 hover:bg-orange-50 hover:text-orange-600'
                   } ${collapsed ? 'justify-center' : ''}`}
                 >
-                  <Icon className="h-5 w-5 shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
+                  <Icon className={`h-5 w-5 shrink-0 ${item.isPrime ? 'text-[#D4AF37]' : ''}`} />
+                  {!collapsed && <span className={item.isPrime ? 'font-bold' : ''}>{item.label}</span>}
                 </Link>
                 {isProducts && !collapsed && (
                   <Link

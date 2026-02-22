@@ -20,6 +20,7 @@ const productSchema = z.object({
   basePrice: z.number().min(0),
   buyPrice: z.number().optional(),
   salePrice: z.number().optional(),
+  compareAtPrice: z.number().optional(),
   taxRate: z.number().min(0),
   supplier: z.string().optional(),
   stock: z.optional(
@@ -47,6 +48,7 @@ type Product = {
   basePrice: number;
   buyPrice: number | null;
   salePrice: number | null;
+  compareAtPrice: number | null;
   taxRate: number;
   supplier: string | null;
   stock?: number | null;
@@ -123,6 +125,7 @@ export default function ProductEditForm({ product }: { product: Product }) {
       basePrice: Number(product.basePrice),
       buyPrice: product.buyPrice != null ? Number(product.buyPrice) : undefined,
       salePrice: product.salePrice != null ? Number(product.salePrice) : undefined,
+      compareAtPrice: product.compareAtPrice != null ? Number(product.compareAtPrice) : undefined,
       taxRate: Number(product.taxRate),
       supplier: product.supplier ?? '',
       stock: isReadyStock ? Number(stockValue) : undefined,
@@ -160,6 +163,7 @@ export default function ProductEditForm({ product }: { product: Product }) {
         basePrice: data.basePrice,
         buyPrice: data.buyPrice ?? null,
         salePrice: data.salePrice ?? null,
+        compareAtPrice: data.compareAtPrice ?? null,
         taxRate: data.taxRate,
         supplier: data.supplier || null,
         stock: stockNum,
@@ -287,7 +291,7 @@ export default function ProductEditForm({ product }: { product: Product }) {
         {errors.categoryId && <p className="mt-1 text-sm text-red-600">{errors.categoryId.message}</p>}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Taban Fiyat (TL) *</label>
           <input {...register('basePrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
@@ -296,6 +300,11 @@ export default function ProductEditForm({ product }: { product: Product }) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Satış Fiyatı (TL)</label>
           <input {...register('salePrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Piyasa Fiyatı (İndirimsiz)</label>
+          <input {...register('compareAtPrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" placeholder="İsteğe bağlı" />
+          <p className="mt-1 text-xs text-gray-500">Satış fiyatından yüksek girerseniz indirim gösterilir.</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Alış/Maliyet (TL)</label>

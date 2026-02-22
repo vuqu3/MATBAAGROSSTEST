@@ -19,6 +19,8 @@ export default async function ProductsPage() {
             id: true,
             name: true,
             slug: true,
+            parentId: true,
+            order: true,
           },
         },
       },
@@ -26,7 +28,7 @@ export default async function ProductsPage() {
     }),
     prisma.category.findMany({
       where: { isActive: true },
-      select: { id: true, name: true, slug: true },
+      select: { id: true, name: true, slug: true, parentId: true, order: true },
       orderBy: [{ order: 'asc' }, { name: 'asc' }],
     }),
   ]);

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Resend } from 'resend';
+import { render } from '@react-email/render';
+import OrderConfirmation from '@/emails/OrderConfirmation';
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -119,8 +122,17 @@ export async function POST(request: Request) {
     const productIds = [...new Set(items.map((i) => i.productId))];
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
-      select: { id: true, vendorId: true },
+      select: { id: true, vendorId: true, vendor: { select: { isBlocked: true } } },
     });
+
+    const blockedProduct = products.find((p: { vendor: { isBlocked: boolean } | null }) => p.vendor?.isBlocked === true);
+    if (blockedProduct) {
+      return NextResponse.json(
+        { error: 'Sepetinizdeki bir veya daha fazla ürün artık satışta değil. Lütfen sepetinizi güncelleyin.' },
+        { status: 400 }
+      );
+    }
+
     const productVendorMap = Object.fromEntries(products.map((p: { id: string; vendorId: string | null }) => [p.id, p.vendorId]));
 
     const order = await prisma.order.create({
@@ -148,8 +160,58 @@ export async function POST(request: Request) {
       include: {
         address: true,
         items: true,
+        user: { select: { name: true, email: true } },
       },
     });
+
+    // Send order confirmation email — non-blocking, never cancels the order
+    if (!process.env.RESEND_API_KEY) {
+      console.error('🚨 KRİTİK HATA: RESEND_API_KEY .env dosyasından okunamadı! Sunucuyu kapatıp açtığınızdan emin olun.');
+    } else {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+
+        const emailHtml = await render(
+          OrderConfirmation({
+            orderNumber: order.barcode || `#${order.id.slice(-8)}`,
+            customerName: order.user.name || 'Değerli Müşterimiz',
+            customerEmail: order.user.email,
+            items: order.items.map(item => ({
+              productName: item.productName,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+              imageUrl: item.imageUrl,
+            })),
+            totalAmount: order.totalAmount,
+            orderDate: order.createdAt.toISOString(),
+            shippingAddress: address ? {
+              title: address.title || undefined,
+              line1: address.line1,
+              line2: address.line2 || undefined,
+              district: address.district || undefined,
+              city: address.city,
+              postalCode: address.postalCode || undefined,
+            } : undefined,
+          })
+        );
+
+        const { data, error } = await resend.emails.send({
+          from: 'onboarding@resend.dev',
+          to: 'volkanongunn@gmail.com',
+          subject: 'SİSTEM TESTİ - Sipariş ' + Date.now(),
+          html: emailHtml,
+        });
+
+        if (error) {
+          console.error('❌ RESEND GÖNDERİM HATASI:', error.message, error);
+        } else {
+          console.log('✅ RESEND BAŞARILI: Mail Resend sunucularına iletildi', data);
+        }
+      } catch (emailError) {
+        console.error('❌ RESEND GÖNDERİM HATASI:', emailError instanceof Error ? emailError.message : emailError, emailError);
+      }
+    }
 
     return NextResponse.json(order);
   } catch (error) {

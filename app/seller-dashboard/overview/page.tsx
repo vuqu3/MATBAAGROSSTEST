@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Package, Clock, Star } from 'lucide-react';
+import { ShoppingCart, Package, Clock } from 'lucide-react';
 
 function formatTRY(n: number) {
   return new Intl.NumberFormat('tr-TR', {
@@ -19,32 +19,51 @@ const statusLabel: Record<string, string> = {
   COMPLETED: 'Tamamlandı',
 };
 
-const dummyQuestions = [
-  { id: 1, text: '500gr kutu için logo basılıyor mu?', date: '2 saat önce' },
-  { id: 2, text: 'Minimum sipariş adedi nedir?', date: '5 saat önce' },
-  { id: 3, text: 'Özel ebat yapılıyor mu?', date: '1 gün önce' },
-];
-
 type OverviewData = {
   totalSales: number;
   pendingOrders: number;
   pendingProducts: number;
-  storeScore: number;
+  chartData?: { date: string; total: number }[];
   recentOrders?: { id: string; barcode: string | null; status: string; totalPrice: number; createdAt: string }[];
+};
+
+type CustomerQuestion = {
+  id: string;
+  text: string;
+  date: string;
+  customerName: string;
 };
 
 export default function SellerOverviewPage() {
   const [data, setData] = useState<OverviewData | null>(null);
+  const [questions, setQuestions] = useState<CustomerQuestion[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/seller/overview')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((d) => {
-        if (d) setData(d);
+    const loadData = async () => {
+      try {
+        const [overviewRes, questionsRes] = await Promise.all([
+          fetch('/api/seller/overview'),
+          fetch('/api/seller/questions'),
+        ]);
+
+        if (overviewRes.ok) {
+          const overviewData = await overviewRes.json();
+          setData(overviewData);
+        }
+
+        if (questionsRes.ok) {
+          const questionsData = await questionsRes.json();
+          setQuestions(questionsData.questions || []);
+        }
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    };
+
+    loadData();
   }, []);
 
   if (loading) {
@@ -77,12 +96,6 @@ export default function SellerOverviewPage() {
       color: 'bg-amber-500',
       href: '/seller-dashboard/products',
     },
-    {
-      title: 'Mağaza Puanı',
-      value: `${data?.storeScore ?? 0}/10`,
-      icon: Star,
-      color: 'bg-emerald-500',
-    },
   ];
 
   return (
@@ -90,7 +103,7 @@ export default function SellerOverviewPage() {
       <h1 className="text-2xl font-bold text-gray-800">Özet</h1>
 
       {/* 1. İstatistik Kartları */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stats.map((s) => {
           const Icon = s.icon;
           const card = (
@@ -122,17 +135,29 @@ export default function SellerOverviewPage() {
       {/* 2. Satış Grafiği Alanı */}
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Son 30 Günlük Satış</h2>
-        <div className="flex items-end justify-between gap-2 h-48 px-2">
-          {[40, 65, 45, 80, 55, 70, 90, 60, 75, 85].map((h, i) => (
-            <div
-              key={i}
-              className="flex-1 rounded-t bg-orange-200 min-w-0"
-              style={{ height: `${h}%` }}
-              title={`Gün ${i + 1}`}
-            />
-          ))}
-        </div>
-        <p className="text-xs text-gray-400 mt-2 text-center">Günlük satış (simülasyon)</p>
+        {data?.chartData && data.chartData.length > 0 ? (
+          <>
+            <div className="flex items-end justify-between gap-2 h-48 px-2">
+              {data.chartData.map((day, i) => {
+                const maxValue = Math.max(...data.chartData!.map(d => d.total));
+                const height = maxValue > 0 ? (day.total / maxValue) * 100 : 0;
+                return (
+                  <div
+                    key={i}
+                    className="flex-1 rounded-t bg-orange-200 min-w-0"
+                    style={{ height: `${height}%` }}
+                    title={`${new Date(day.date).toLocaleDateString('tr-TR')}: ${formatTRY(day.total)}`}
+                  />
+                );
+              })}
+            </div>
+            <p className="text-xs text-gray-400 mt-2 text-center">Günlük satış (son 30 gün)</p>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-48 text-gray-400">
+            <p>Henüz satış verisi bulunmuyor</p>
+          </div>
+        )}
       </div>
 
       {/* 3. Alt Bölüm: Son Siparişler + Müşteri Soruları */}
@@ -179,17 +204,24 @@ export default function SellerOverviewPage() {
 
         <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">Son Müşteri Soruları</h2>
-          <ul className="space-y-3">
-            {dummyQuestions.map((q) => (
-              <li
-                key={q.id}
-                className="flex items-start justify-between gap-2 py-2 border-b border-gray-50 last:border-0"
-              >
-                <span className="text-sm text-gray-700">{q.text}</span>
-                <span className="text-xs text-gray-400 shrink-0">{q.date}</span>
-              </li>
-            ))}
-          </ul>
+          {questions.length > 0 ? (
+            <ul className="space-y-3">
+              {questions.map((q) => (
+                <li
+                  key={q.id}
+                  className="flex items-start justify-between gap-2 py-2 border-b border-gray-50 last:border-0"
+                >
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-700">{q.text}</p>
+                    <p className="text-xs text-gray-500 mt-1">{q.customerName}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0">{q.date}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-500 py-4">Henüz yeni mesajınız bulunmamuyor</p>
+          )}
           <Link
             href="/seller-dashboard/questions"
             className="mt-4 inline-block text-sm font-medium text-orange-600 hover:text-orange-700"

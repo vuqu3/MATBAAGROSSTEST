@@ -12,10 +12,12 @@ interface ProductCardEcommerceProps {
   image: string;
   price: number;
   originalPrice?: number;
+  compareAtPrice?: number;
   discount?: number;
   rating?: number;
   reviewCount?: number;
   productType?: 'READY' | 'CUSTOM';
+  stock?: number | null;
   stockQuantity?: number | null;
 }
 
@@ -25,19 +27,31 @@ export default function ProductCardEcommerce({
   image,
   price,
   originalPrice,
+  compareAtPrice,
   discount,
   rating = 4.5,
   reviewCount = 0,
   productType,
+  stock,
   stockQuantity,
 }: ProductCardEcommerceProps) {
+  // İndirim mantığı: compareAtPrice > price ise indirim var
+  const effectiveOriginalPrice = originalPrice || compareAtPrice;
+  const effectiveDiscount = discount ?? (effectiveOriginalPrice && effectiveOriginalPrice > price 
+    ? Math.round(((effectiveOriginalPrice - price) / effectiveOriginalPrice) * 100)
+    : undefined);
   const isReady = productType === 'READY';
   const router = useRouter();
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
 
+  // Stock status logic - use both stock and stockQuantity
+  const isInStock = (stock !== null && stock !== undefined && stock > 0) || 
+                   (stockQuantity !== null && stockQuantity !== undefined && stockQuantity > 0);
+  const stockStatus = isInStock ? 'in_stock' : 'out_of_stock';
+
   const handleQuickAdd = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (!isReady) {
+    if (!isReady || !isInStock) {
       return;
     }
     e.preventDefault();
@@ -58,7 +72,7 @@ export default function ProductCardEcommerce({
   };
 
   const handleAddButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (isReady) {
+    if (isReady && isInStock) {
       handleQuickAdd(e);
       return;
     }
@@ -74,9 +88,23 @@ export default function ProductCardEcommerce({
             alt={name}
             className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 p-1"
           />
-          {discount != null && discount > 0 && (
+          {effectiveDiscount != null && effectiveDiscount > 0 && (
             <div className="absolute top-1 left-1 bg-red-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold z-10">
-              %{discount}
+              %{effectiveDiscount}
+            </div>
+          )}
+          
+          {/* Stock Overlay */}
+          {!isInStock && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20">
+              <div className="text-center">
+                <div className="bg-red-600 text-white px-3 py-2 rounded-lg font-bold text-sm mb-2">
+                  STOKTA YOK
+                </div>
+                <div className="text-white text-xs font-medium">
+                  YAKINDA STOKLARDA
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -98,10 +126,10 @@ export default function ProductCardEcommerce({
 
         <div className="mt-auto pt-2 space-y-1">
           <div>
-            {originalPrice != null && originalPrice > price ? (
+            {effectiveOriginalPrice != null && effectiveOriginalPrice > price ? (
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs text-gray-500 line-through">
-                  {originalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
+                  {effectiveOriginalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
                 </span>
                 <span className="text-sm font-semibold text-[#FF6000]">
                   {price.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
@@ -115,22 +143,39 @@ export default function ProductCardEcommerce({
           </div>
           {productType != null && (
             <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded ${
-              isReady ? 'bg-gray-100 text-gray-600' : 'bg-[#0f766e]/10 text-[#0f766e]'
+              isReady 
+                ? isInStock 
+                  ? 'bg-green-100 text-green-700' 
+                  : 'bg-red-100 text-red-700'
+                : 'bg-[#0f766e]/10 text-[#0f766e]'
             }`}>
-              {isReady ? 'Hazır Stok' : 'Firmanıza Özel Baskılı'}
+              {isReady 
+                ? isInStock 
+                  ? 'Hazır Stok' 
+                  : 'Tükendi'
+                : 'Firmanıza Özel Baskılı'
+              }
             </span>
           )}
           <button
             type="button"
             onClick={handleAddButtonClick}
+            disabled={!isInStock}
             className={`w-full font-medium py-1.5 px-3 rounded-md text-sm transition-colors flex items-center justify-center gap-1.5 ${
               added
                 ? 'bg-green-600 hover:bg-green-700 text-white'
-                : 'bg-[#FF6000] hover:bg-[#e55a00] text-white'
+                : isInStock
+                  ? 'bg-[#FF6000] hover:bg-[#e55a00] text-white'
+                  : 'bg-gray-400 text-gray-200 cursor-not-allowed hover:bg-gray-400'
             }`}
           >
             <ShoppingCart size={14} />
-            {added ? 'Eklendi!' : 'Sepete Ekle'}
+            {added 
+              ? 'Eklendi!' 
+              : isInStock 
+                ? 'Sepete Ekle' 
+                : 'Tükendi'
+            }
           </button>
         </div>
       </div>

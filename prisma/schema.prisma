@@ -63,8 +63,11 @@ model Vendor {
   slug            String    @unique
   commissionRate  Float     @default(2.0) // Komisyon oranı (%)
   balance         Float     @default(0)   // Kazanılan bakiye
+  isBlocked       Boolean   @default(false) // Satıcı engellendi mi
   ownerId         String    @unique
   owner           User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  bids            Bid[]     // Satıcının verdiği teklifler
+  machineListings MachineListing[] // Satıcının makine ilanları
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   products        Product[]
@@ -112,6 +115,9 @@ model Order {
   totalAmount   Float
   status        OrderStatus   @default(PENDING)
   paymentStatus PaymentStatus @default(AWAITING_PAYMENT)
+  invoiceUrl      String?       // Satıcının yüklediği fatura PDF linki
+  trackingNumber  String?       // Kargo takip numarası
+  shippingCompany String?       // Kargo firması adı (Yurtiçi, Aras, MNG vb.)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   items           OrderItem[]
@@ -178,12 +184,21 @@ model Product {
   purchasePrice     Float?      // Alış fiyatı
   buyPrice          Float?      // Alış fiyatı (maliyet hesabı için)
   salePrice         Float?      // Satış fiyatı
+  compareAtPrice    Float?      // Piyasa/Üstü çizili fiyat (indirim gösterimi için)
+  unitPrice         Float?      // Referans birim fiyatı (1 adet için, indirim rozeti hesabında kullanılır)
   taxRate           Float       @default(20) // KDV oranı
   
   // Stok ve Tedarikçi
   stock             Int         @default(0) // Stok takibi
   stockQuantity     Int?        // Sadece READY için (eski alan, geriye dönük uyumluluk)
   supplier          String?     // Tedarikçi Firma Adı
+  
+  // Kargo ve Teslimat Ölçüleri
+  width             Float?      // En (cm)
+  height            Float?      // Yükseklik (cm) 
+  depth             Float?      // Boy (cm)
+  weight            Float?      // Ağırlık (kg)
+  desi              Float?      // Desi (otomatik hesaplanır)
   
   // Özel Baskı Ürünü için
   minOrderQuantity  Int?        // Minimum sipariş adedi
@@ -215,8 +230,22 @@ model Product {
   
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
+  featuredWidgets   FeaturedWidget[]
+  variants          ProductVariant[]
 
   @@map("products")
+}
+
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String   // Örn: "25 Adet", "100 Adet"
+  price     Float
+  stock     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("product_variants")
 }
 
 enum SupportTicketStatus {
@@ -253,6 +282,27 @@ model TicketMessage {
   @@map("ticket_messages")
 }
 
+enum SupplierApplicationStatus {
+  PENDING   // Beklemede (inceleme bekliyor)
+  REVIEWED  // İncelendi (görüşüldü)
+  APPROVED  // Onaylandı (satıcı hesabı oluşturuldu)
+  REJECTED  // Reddedildi
+}
+
+model SupplierApplication {
+  id           String                     @id @default(cuid())
+  companyName  String                     // Firma Adı
+  contactName  String                     // Yetkili Kişi
+  phone        String                     // Telefon
+  email        String                     // E-posta
+  productGroup String                     // Ürün Grubu
+  status       SupplierApplicationStatus @default(PENDING)
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+
+  @@map("supplier_applications")
+}
+
 model HeroWidget {
   id        String   @id @default(cuid())
   title     String   // Üst şerit yazısı (örn. Ramazan, Ambalaj)
@@ -265,4 +315,157 @@ model HeroWidget {
   updatedAt DateTime @updatedAt
 
   @@map("hero_widgets")
+}
+
+// Premium Talepler
+model QuoteRequest {
+  id                  String    @id @default(cuid())
+  requestNo           String    @unique // Talep No (TLP-XXXXX)
+  productTitle        String?   // Ürün başlığı
+  productGroup        String    // Ürün grubu
+  requestSummary      String?   // Talep özeti
+  technicalDetails    String?   // Teknik detaylar
+  quantity            Int?      // Adet
+  deadlineExpectation String?   // Termin beklentisi
+  attachment          Json?     // Ekli dosya bilgisi
+  expiresAt           DateTime  // Teklif son tarihi
+  status              QuoteRequestStatus @default(OPEN)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // İlişkiler
+  bids                Bid[]
+
+  @@map("quote_requests")
+}
+
+// Teklifler
+model Bid {
+  id            String      @id @default(cuid())
+  vendorId      String      // Satıcı ID
+  requestId     String      // Talep ID
+  price         Float       // Fiyat
+  deliveryDays  Int?        // Termin süresi (gün)
+  sellerNote    String?     // Satıcı notu
+  status        BidStatus   @default(OFFER_RECEIVED)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // İlişkiler
+  vendor        Vendor      @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  request       QuoteRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, requestId]) // Her satıcı her talebe sadece bir teklif verebilir
+  @@map("bids")
+}
+
+// Talep Durumları
+enum QuoteRequestStatus {
+  OPEN        // Açık (teklif alınıyor)
+  CLOSED      // Kapalı (teklif alma sona erdi)
+  AWARDED     // İş verildi
+  CANCELLED   // İptal edildi
+}
+
+// Teklif Durumları
+enum BidStatus {
+  OFFER_RECEIVED    // Teklif alındı
+  UNDER_REVIEW      // İnceleniyor
+  ACCEPTED          // Kabul edildi
+  REJECTED          // Reddedildi
+  EXPIRED           // Süresi doldu
+}
+
+// Makine İlanları
+model MachineListing {
+  id              String              @id @default(cuid())
+  title           String              // İlan başlığı
+  description     String              // Açıklama
+  price           Float?              // Fiyat
+  category        String              // Kategori (Ofset, Dijital, Kesim vb.)
+  brand           String?             // Marka
+  model           String?             // Model
+  year            Int?                // Yıl
+  condition       MachineCondition    @default(USED) // Durum
+  location        String              // Konum
+  images          Json?               // Resim URL'leri
+  specifications  Json?               // Teknik özellikler
+  contactInfo     Json?               // İletişim bilgileri
+  expiresAt       DateTime            // Bitiş tarihi
+  status          MachineListingStatus @default(ACTIVE)
+  featured        Boolean             @default(false) // Vitrin ilanı mı?
+  vendorId        String              // Satıcı ID
+  
+  // İlişkiler
+  vendor          Vendor              @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("machine_listings")
+}
+
+// Makine Durumları
+enum MachineCondition {
+  NEW              // Yeni
+  USED             // İkinci el
+  REFURBISHED      // Yenilenmiş
+}
+
+// Makine İlanı Durumları
+enum MachineListingStatus {
+  ACTIVE           // Aktif
+  EXPIRED          // Süresi dolmuş
+  SOLD             // Satıldı
+  DRAFT            // Taslak
+  PENDING          // Onay bekliyor
+  REJECTED         // Reddedildi
+}
+
+// Lead (Potansiyel Müşteri) Tablosu
+model Lead {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  name              String?
+  phone             String?
+  company           String?
+  source            String   @default("website") // website, referral, etc.
+  tags              String   @default("") // Prime_Waitlist,Newsletter, etc. (comma separated)
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  contactedAt       DateTime?
+  convertedAt       DateTime?
+  
+  @@map("leads")
+}
+
+// Banner Model - Ana sayfa slider için
+model Banner {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  title     String
+  subtitle  String
+  link      String?  // Opsiyonel link
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("banners")
+}
+
+// FeaturedWidget Model - Öne çıkan ürünler için
+model FeaturedWidget {
+  id           String   @id @default(cuid())
+  productId    String
+  customTitle  String?  // Opsiyonel özel başlık
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Product ile ilişki
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@map("featured_widgets")
 }

@@ -1,17 +1,25 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Package, Edit, Plus, AlertTriangle, CheckCircle, MinusCircle, Check, X } from 'lucide-react';
+import { Package, Edit, Plus, AlertTriangle, CheckCircle, MinusCircle, Check, X, Search, ChevronDown } from 'lucide-react';
 import DeleteButton from './DeleteButton';
 
 type Category = {
   id: string;
   name: string;
   slug: string;
+  parentId: string | null;
+  order: number;
 };
+
+interface CategoryNode extends Category {
+  children: CategoryNode[];
+  level: number;
+  path: string; // Full path for breadcrumb display
+}
 
 type ProductStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
@@ -71,6 +79,108 @@ export default function ProductsTableWithTabs({ products, categories }: Props) {
 
   const [statusFilter, setStatusFilter] = useState<'all' | 'PENDING' | 'REJECTED'>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Build hierarchical tree structure from flat categories
+  const buildCategoryTree = (flatCategories: Category[]): CategoryNode[] => {
+    const categoryMap = new Map<string, CategoryNode>();
+    const rootCategories: CategoryNode[] = [];
+
+    // Create map of all categories
+    flatCategories.forEach(category => {
+      categoryMap.set(category.id, {
+        ...category,
+        children: [],
+        level: 0,
+        path: category.name,
+      });
+    });
+
+    // Build tree structure and calculate paths
+    flatCategories.forEach(category => {
+      const node = categoryMap.get(category.id)!;
+      
+      if (category.parentId) {
+        const parent = categoryMap.get(category.parentId);
+        if (parent) {
+          node.level = parent.level + 1;
+          node.path = `${parent.path} > ${category.name}`;
+          parent.children.push(node);
+        }
+      } else {
+        rootCategories.push(node);
+      }
+    });
+
+    // Sort categories by order, then by name
+    const sortCategories = (nodes: CategoryNode[]): CategoryNode[] => {
+      return nodes.sort((a, b) => {
+        if (a.order !== b.order) {
+          return a.order - b.order;
+        }
+        return a.name.localeCompare(b.name, 'tr');
+      }).map(node => ({
+        ...node,
+        children: sortCategories(node.children)
+      }));
+    };
+
+    return sortCategories(rootCategories);
+  };
+
+  // Flatten tree for dropdown options with search filtering
+  const flattenCategoriesForDropdown = (nodes: CategoryNode[], searchTerm: string = ''): Array<{id: string, name: string, path: string, level: number}> => {
+    const result: Array<{id: string, name: string, path: string, level: number}> = [];
+    
+    const flatten = (nodeList: CategoryNode[]) => {
+      nodeList.forEach(node => {
+        // Add current category if matches search
+        if (!searchTerm || 
+            node.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            node.path.toLowerCase().includes(searchTerm.toLowerCase())) {
+          result.push({
+            id: node.id,
+            name: node.name,
+            path: node.path,
+            level: node.level
+          });
+        }
+        
+        // Add children
+        if (node.children.length > 0) {
+          flatten(node.children);
+        }
+      });
+    };
+    
+    flatten(nodes);
+    return result;
+  };
+
+  // Build category tree
+  const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
+
+  // Filter categories based on search
+  const filteredCategories = useMemo(() => 
+    flattenCategoriesForDropdown(categoryTree, categorySearch),
+    [categoryTree, categorySearch]
+  );
 
   const [activeTab, setActiveTab] = useState<string | null>(() => {
     if (!categorySlug) return null;
@@ -107,6 +217,19 @@ export default function ProductsTableWithTabs({ products, categories }: Props) {
     if (slug) url.searchParams.set('category', slug);
     else url.searchParams.delete('category');
     window.history.replaceState({}, '', url.pathname + url.search);
+    // Close dropdown after selection
+    setIsDropdownOpen(false);
+    setCategorySearch('');
+  };
+
+  const handleCategorySelect = (categoryId: string | null) => {
+    setTab(categoryId);
+  };
+
+  const getSelectedCategoryName = () => {
+    if (!activeTab) return 'Tüm Kategoriler';
+    const category = categories.find((c) => c.id === activeTab);
+    return category?.name || 'Tüm Kategoriler';
   };
 
   const setProductStatus = async (productId: string, status: 'APPROVED' | 'REJECTED') => {
@@ -185,35 +308,88 @@ export default function ProductsTableWithTabs({ products, categories }: Props) {
         </nav>
       </div>
 
-      {/* Kategori sekmeleri */}
-      <div className="border-b border-gray-200 mb-4">
-        <nav className="flex flex-wrap gap-1" aria-label="Kategori filtreleri">
-          <button
-            type="button"
-            onClick={() => setTab(null)}
-            className={`px-3 py-2 text-xs font-medium rounded-t border-b-2 transition-colors ${
-              activeTab === null
-                ? 'border-blue-600 text-blue-600 bg-blue-50'
-                : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            Tüm kategoriler
-          </button>
-          {categories.map((cat) => (
+      {/* Kategori Dropdown Filtresi */}
+      <div className="mb-4" ref={dropdownRef}>
+        <div className="relative">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Kategori Filtresi
+          </label>
+          <div className="relative">
             <button
-              key={cat.id}
               type="button"
-              onClick={() => setTab(cat.id)}
-              className={`px-3 py-2 text-xs font-medium rounded-t border-b-2 transition-colors ${
-                activeTab === cat.id
-                  ? 'border-blue-600 text-blue-600 bg-blue-50'
-                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="w-full md:w-80 px-4 py-2 text-left bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
             >
-              {cat.name}
+              <span className="text-sm text-gray-900">{getSelectedCategoryName()}</span>
+              <ChevronDown 
+                size={16} 
+                className={`text-gray-400 transition-transform ${isDropdownOpen ? 'transform rotate-180' : ''}`}
+              />
             </button>
-          ))}
-        </nav>
+            
+            {isDropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full md:w-80 bg-white border border-gray-300 rounded-lg shadow-lg">
+                {/* Search Input */}
+                <div className="p-3 border-b border-gray-200">
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Kategori ara..."
+                      value={categorySearch}
+                      onChange={(e) => setCategorySearch(e.target.value)}
+                      className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                
+                {/* Dropdown Options */}
+                <div className="max-h-60 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleCategorySelect(null)}
+                    className={`w-full px-4 py-2 text-sm text-left hover:bg-gray-50 border-b border-gray-100 ${
+                      !activeTab ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                    }`}
+                  >
+                    Tüm Kategoriler
+                  </button>
+                  
+                  {filteredCategories.map((category) => (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={() => handleCategorySelect(category.id)}
+                      className={`w-full px-4 py-2 text-sm text-left hover:bg-gray-50 border-b border-gray-100 ${
+                        activeTab === category.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                      }`}
+                      style={{ paddingLeft: `${16 + category.level * 16}px` }}
+                    >
+                      <div className="flex items-center">
+                        {category.level > 0 && (
+                          <span className="text-gray-400 mr-2">{'─'.repeat(category.level)}</span>
+                        )}
+                        <span className="truncate">{category.name}</span>
+                      </div>
+                      {category.level > 0 && (
+                        <div className="text-xs text-gray-500 truncate ml-auto">
+                          {category.path}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                  
+                  {filteredCategories.length === 0 && (
+                    <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                      Eşleşen kategori bulunamadı
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Tablo veya boş durum */}

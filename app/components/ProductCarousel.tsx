@@ -11,10 +11,12 @@ interface Product {
   image: string;
   price: number;
   originalPrice?: number;
+  compareAtPrice?: number;
   discount?: number;
   rating?: number;
   reviewCount?: number;
   productType?: 'READY' | 'CUSTOM';
+  stock?: number | null;
   stockQuantity?: number | null;
 }
 
@@ -116,10 +118,12 @@ export default function ProductCarousel({ title, products, showTimer = false, ti
                   image={product.image}
                   price={product.price}
                   originalPrice={product.originalPrice}
+                  compareAtPrice={product.compareAtPrice}
                   discount={product.discount}
                   rating={product.rating}
                   reviewCount={product.reviewCount}
                   productType={product.productType}
+                  stock={product.stock}
                   stockQuantity={product.stockQuantity}
                 />
               </div>

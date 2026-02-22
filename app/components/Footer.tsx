@@ -1,6 +1,6 @@
 'use client';
 
-import { Truck, RotateCcw, CreditCard, Phone, Mail, MapPin, Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
+import { Truck, RotateCcw, CreditCard, Phone, Mail, MapPin, Facebook, Instagram, Linkedin, Twitter, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -28,7 +28,6 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
                   <RotateCcw className="h-8 w-8 flex-shrink-0 text-orange-500" />
                   <div>
                     <h3 className="font-semibold text-gray-900">Kolay İade Garantisi</h3>
-                    <p className="text-sm text-gray-600 mt-0.5">Koşulsuz 7 gün içinde iade hakkı.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 md:px-6 first:md:pl-0 last:md:pr-0">
@@ -123,6 +122,12 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
                   Matbaa Malzemeleri
                 </Link>
               </li>
+              <li className="pt-2 border-t border-gray-700">
+                <Link href="/machine-prime" className="flex items-center gap-2 font-bold text-[#D4AF37] hover:text-[#B8941F] transition-all duration-200 hover:translate-x-1 group">
+                  <Sparkles className="w-4 h-4 text-[#D4AF37] group-hover:rotate-12 transition-transform" />
+                  MatbaaGross Machine Prime
+                </Link>
+              </li>
             </ul>
           </div>
           <div>
@@ -157,17 +162,28 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
             
             {/* İletişim Bilgileri */}
             <div className="space-y-3">
+              <Link
+                href="/seller-login"
+                className="inline-block text-sm font-medium text-[#f97316] hover:text-[#ea580c] transition-colors"
+              >
+                MatbaaGross Seller
+              </Link>
               <div className="flex items-center gap-3 text-sm text-gray-300">
                 <Phone className="w-4 h-4 text-[#f97316]" />
-                <span>0850 123 45 67</span>
+                <span>Yakında eklenecektir</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-gray-300">
                 <Mail className="w-4 h-4 text-[#f97316]" />
-                <span>info@matbaagross.com</span>
+                <a 
+                  href="mailto:destek@matbaagross.com"
+                  className="hover:text-[#f97316] transition-colors"
+                >
+                  destek@matbaagross.com
+                </a>
               </div>
               <div className="flex items-center gap-3 text-sm text-gray-300">
                 <MapPin className="w-4 h-4 text-[#f97316]" />
-                <span>İstanbul, Türkiye</span>
+                <span className="whitespace-pre-line">Yakuplu Mahallesi 194.Sokak 3.Matbaacılar Sitesi 5.kat No:451 Beylikdüzü/İstanbul</span>
               </div>
             </div>
           </div>
@@ -242,6 +258,16 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
                 İade Politikası
               </Link>
             </div>
+          </div>
+
+          {/* Kurumsal Giriş — gizli, sadece satıcılar için */}
+          <div className="mt-6 pt-4 border-t border-gray-700/50 text-center">
+            <Link
+              href="/seller-login"
+              className="text-[11px] text-gray-600 hover:text-gray-400 transition-colors"
+            >
+              Kurumsal Giriş
+            </Link>
           </div>
         </div>
       </div>

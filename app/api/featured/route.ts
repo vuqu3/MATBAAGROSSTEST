@@ -1,0 +1,136 @@
+import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { revalidatePath } from 'next/cache';
+
+// GET - Public featured widgets for homepage
+export async function GET() {
+  try {
+    console.log('PUBLIC_FEATURED_GET_REQUEST');
+
+    const featuredWidgets = await prisma.featuredWidget.findMany({
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            imageUrl: true,
+            basePrice: true,
+            salePrice: true,
+            compareAtPrice: true,
+            isPublished: true,
+            isActive: true,
+          },
+        },
+      },
+      orderBy: { order: 'asc' },
+    });
+
+    console.log('PUBLIC_FEATURED_GET_SUCCESS:', { count: featuredWidgets.length });
+
+    // Filter only active and published products
+    const activeWidgets = featuredWidgets.filter(widget => 
+      widget.product.isPublished && widget.product.isActive
+    );
+
+    console.log('PUBLIC_FEATURED_FILTERED:', { active: activeWidgets.length });
+
+    return NextResponse.json(activeWidgets);
+  } catch (error) {
+    console.error('PUBLIC_FEATURED_GET_ERROR:', error);
+    return NextResponse.json(
+      { 
+        error: 'Öne çıkan ürünler yüklenirken hata oluştu', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// POST - Create new featured widget (admin only)
+export async function POST(request: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { productId, customTitle, order } = body;
+
+    console.log('PUBLIC_FEATURED_POST_REQUEST:', { productId, customTitle, order });
+
+    // Validation
+    if (!productId) {
+      return NextResponse.json({ error: 'Ürün ID zorunludur' }, { status: 400 });
+    }
+
+    if (typeof order !== 'number' || order < 0) {
+      return NextResponse.json({ error: 'Sıra 0 veya pozitif bir sayı olmalıdır' }, { status: 400 });
+    }
+
+    // Product'ın varlığını kontrol et
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, name: true, isPublished: true, isActive: true },
+    });
+
+    if (!product) {
+      return NextResponse.json({ error: 'Ürün bulunamadı' }, { status: 404 });
+    }
+
+    if (!product.isPublished || !product.isActive) {
+      return NextResponse.json({ error: 'Sadece yayında ve aktif olan ürünler öne çıkanlara eklenebilir' }, { status: 400 });
+    }
+
+    // Aynı productId'nin zaten ekli olup olmadığını kontrol et
+    const existingWidget = await prisma.featuredWidget.findFirst({
+      where: { productId },
+    });
+
+    if (existingWidget) {
+      return NextResponse.json({ error: 'Bu ürün zaten öne çıkanlarda mevcut' }, { status: 400 });
+    }
+
+    // FeaturedWidget oluştur
+    const featuredWidget = await prisma.featuredWidget.create({
+      data: {
+        productId,
+        customTitle: customTitle || null,
+        order: parseInt(order.toString()),
+      },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            imageUrl: true,
+            basePrice: true,
+            salePrice: true,
+            compareAtPrice: true,
+            isPublished: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    console.log('PUBLIC_FEATURED_POST_SUCCESS:', featuredWidget);
+
+    // Ana sayfa ve admin sayfasını yenile
+    revalidatePath('/');
+    revalidatePath('/admin/featured');
+
+    return NextResponse.json(featuredWidget);
+  } catch (error) {
+    console.error('PUBLIC_FEATURED_POST_ERROR:', error);
+    return NextResponse.json(
+      { 
+        error: 'Öne çıkan ürün kaydedilirken hata oluştu', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { status: 500 }
+    );
+  }
+}

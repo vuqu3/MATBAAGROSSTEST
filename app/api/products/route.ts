@@ -2,16 +2,27 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-// GET: Liste (ana sayfa: son 8) veya ids=id1,id2 ile belirli ürünler (benzer/önerilen için)
+// GET: Liste (ana sayfa: son 8) veya ids=id1,id2 ile belirli ürünler (benzer/önerilen için) veya admin için limit parametresi
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const idsParam = searchParams.get('ids');
+    const limitParam = searchParams.get('limit');
     const ids = idsParam ? idsParam.split(',').map((id) => id.trim()).filter(Boolean) : [];
+
+    console.log('PRODUCTS_GET_REQUEST:', { idsParam, limitParam, idsLength: ids.length });
 
     if (ids.length > 0) {
       const products = await prisma.product.findMany({
-        where: { id: { in: ids }, isPublished: true, isActive: true },
+        where: {
+          id: { in: ids },
+          isPublished: true,
+          isActive: true,
+          OR: [
+            { vendorId: null },
+            { vendor: { isBlocked: false } },
+          ],
+        },
         include: { category: { select: { id: true, name: true, slug: true } } },
       });
       const order = ids.reduce((acc: Record<string, number>, id, i) => { acc[id] = i; return acc; }, {});
@@ -19,20 +30,75 @@ export async function GET(request: Request) {
       return NextResponse.json(products);
     }
 
+    // Admin için limit parametresi kontrolü
+    if (limitParam) {
+      const session = await auth();
+      if (!session?.user?.id || session.user.role !== 'ADMIN') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      const limit = Math.min(100, Math.max(1, parseInt(limitParam, 10) || 50));
+      const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1);
+      const skip = (page - 1) * limit;
+
+      console.log('PRODUCTS_GET_ADMIN:', { limit, page, skip });
+
+      const products = await prisma.product.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true,
+          basePrice: true,
+          salePrice: true,
+          compareAtPrice: true,
+          isPublished: true,
+          isActive: true,
+          sku: true,
+          productType: true,
+          stock: true,
+          stockQuantity: true,
+          category: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      });
+
+      console.log('PRODUCTS_GET_ADMIN_SUCCESS:', { count: products.length });
+      return NextResponse.json(products);
+    }
+
+    // Normal ana sayfa isteği
     const products = await prisma.product.findMany({
       take: 8,
       orderBy: { createdAt: 'desc' },
       include: {
         category: { select: { id: true, name: true, slug: true } },
       },
-      where: { isPublished: true, isActive: true },
+      where: {
+        isPublished: true,
+        isActive: true,
+        OR: [
+          { vendorId: null },
+          { vendor: { isBlocked: false } },
+        ],
+      },
     });
 
     return NextResponse.json(products);
   } catch (error) {
-    console.error('Products GET error:', error);
+    console.error('PRODUCTS_GET_ERROR:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Ürünler yüklenirken hata oluştu', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
       { status: 500 }
     );
   }
@@ -70,6 +136,8 @@ export async function POST(request: Request) {
         categoryId,
         imageUrl,
         images: bodyImages,
+        variants: bodyVariants,
+        unitPrice: bodyUnitPrice,
       } = body;
 
       if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -96,6 +164,16 @@ export async function POST(request: Request) {
         ? imageUrl.trim()
         : (imagesNormalized[0] ?? null);
 
+      const validVariants = Array.isArray(bodyVariants)
+        ? bodyVariants
+            .filter((v: { name?: string; price?: unknown }) => v.name?.trim() && !Number.isNaN(Number(v.price)))
+            .map((v: { name: string; price: unknown; stock?: unknown }) => ({
+              name: String(v.name).trim(),
+              price: Number(v.price),
+              stock: Math.max(0, parseInt(String(v.stock ?? 0), 10) || 0),
+            }))
+        : [];
+
       const product = await prisma.product.create({
         data: {
           name: name.trim(),
@@ -108,15 +186,20 @@ export async function POST(request: Request) {
           vendorId: vendor.id,
           vendorName: vendor.name,
           basePrice: priceNum,
+          unitPrice: bodyUnitPrice != null && !Number.isNaN(Number(bodyUnitPrice)) ? Number(bodyUnitPrice) : null,
           stock: stockNum,
           stockQuantity: stockNum,
           taxRate: 20,
           status: 'PENDING',
           isActive: true,
           isPublished: false,
+          ...(validVariants.length > 0 && {
+            variants: { create: validVariants },
+          }),
         },
         include: {
           category: { select: { id: true, name: true, slug: true } },
+          variants: true,
         },
       });
       return NextResponse.json(product, { status: 201 });

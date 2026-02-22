@@ -13,9 +13,17 @@ export async function GET(
       where: { id },
       include: {
         category: { select: { id: true, name: true, slug: true } },
+        vendor: { select: { isBlocked: true } },
+        variants: {
+          select: { id: true, name: true, price: true, stock: true },
+          orderBy: { price: 'asc' },
+        },
       },
     });
     if (!product) {
+      return NextResponse.json({ error: 'Ürün bulunamadı' }, { status: 404 });
+    }
+    if (product.vendor?.isBlocked) {
       return NextResponse.json({ error: 'Ürün bulunamadı' }, { status: 404 });
     }
     return NextResponse.json(product);

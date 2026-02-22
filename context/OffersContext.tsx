@@ -24,6 +24,7 @@ export type Quote = {
   id: string;
   requestNo: string;
   partnerLabel: string;
+  vendorId?: string; // Hangi satıcının teklifi olduğu
   price: number;
   deliveryDays?: number;
   sellerNote?: string;

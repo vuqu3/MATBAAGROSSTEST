@@ -31,7 +31,7 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-x-hidden w-full`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-x-hidden md:overflow-x-visible`}
       >
         <Providers>{children}</Providers>
       </body>

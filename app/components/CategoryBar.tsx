@@ -46,10 +46,10 @@ export default function CategoryBar() {
           data.map((c) => ({
             id: c.id,
             name: c.name,
-            link: `/kategori/${c.slug}`,
+            link: `/urunler?kategori=${c.slug}`,
             subCategories: (c.children || []).map((ch) => ({
               name: ch.name,
-              link: `/kategori/${ch.slug}`,
+              link: `/urunler?kategori=${ch.slug}`,
             })),
           }))
         );
