@@ -2,12 +2,10 @@
 
 import Link from 'next/link';
 import { CheckCircle, ShoppingBag, Home, Package } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-
-export default function SiparisBasariliPage() {
+function OrderSuccessContent() {
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get('orderNo') || '';
   const [visible, setVisible] = useState(false);
@@ -96,5 +94,19 @@ export default function SiparisBasariliPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SiparisBasariliPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Sipariş bilgileriniz yükleniyor...
+        </div>
+      }
+    >
+      <OrderSuccessContent />
+    </Suspense>
   );
 }
