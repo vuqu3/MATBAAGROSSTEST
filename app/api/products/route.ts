@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getMatbaaGrossVendor } from '@/lib/getMatbaaGrossVendor';
 
 // GET: Liste (ana sayfa: son 8) veya ids=id1,id2 ile belirli ürünler (benzer/önerilen için) veya admin için limit parametresi
 export async function GET(request: Request) {
@@ -118,6 +119,7 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const isSeller = session.user.role === 'SELLER';
+    const isAdmin = session.user.role === 'ADMIN';
 
     if (isSeller) {
       const vendor = await prisma.vendor.findUnique({
@@ -205,7 +207,9 @@ export async function POST(request: Request) {
       return NextResponse.json(product, { status: 201 });
     }
 
-    // ADMIN flow
+    // ADMIN flow — auto-assign MatbaaGross vendor if no vendorId provided
+    const mgVendor = await getMatbaaGrossVendor();
+
     const {
       name,
       sku,
@@ -225,13 +229,20 @@ export async function POST(request: Request) {
       productionDays,
       dynamicAttributes,
       attributes,
-      vendorName,
-      vendorId,
+      vendorName: bodyVendorName,
+      vendorId: bodyVendorId,
       images: bodyImages,
       highlights,
       descriptionDetail,
       relatedProducts,
     } = body;
+
+    const vendorId = (bodyVendorId && typeof bodyVendorId === 'string' && bodyVendorId.trim())
+      ? bodyVendorId.trim()
+      : (mgVendor?.id ?? null);
+    const vendorName = (bodyVendorName && typeof bodyVendorName === 'string' && bodyVendorName.trim())
+      ? bodyVendorName.trim()
+      : (mgVendor?.name ?? 'MatbaaGross');
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json(

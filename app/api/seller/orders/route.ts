@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getMatbaaGrossVendor } from '@/lib/getMatbaaGrossVendor';
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -8,10 +9,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const vendor = await prisma.vendor.findUnique({
-    where: { ownerId: session.user.id },
-    select: { id: true },
-  });
+  let vendor: { id: string } | null = null;
+
+  if (session.user.role === 'ADMIN') {
+    vendor = await getMatbaaGrossVendor();
+  } else {
+    vendor = await prisma.vendor.findUnique({
+      where: { ownerId: session.user.id },
+      select: { id: true },
+    });
+  }
+
   if (!vendor) {
     return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
   }
