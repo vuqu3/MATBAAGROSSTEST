@@ -196,8 +196,10 @@ export async function POST(request: Request) {
           })
         );
 
-        const customerEmail = order.user.email;
         const adminEmail = process.env.ADMIN_EMAIL || 'volkanongunn@gmail.com';
+        const customerEmail = order.user.email || adminEmail;
+
+        console.log('📧 RESEND GÖNDERİLİYOR:', { to: customerEmail, bcc: adminEmail, orderNo: order.barcode });
 
         const { data, error } = await resend.emails.send({
           from: 'MatbaaGross Sipariş <noreply@matbaagross.com>',
@@ -208,9 +210,9 @@ export async function POST(request: Request) {
         });
 
         if (error) {
-          console.error('❌ RESEND GÖNDERİM HATASI:', error.message, error);
+          console.error('❌ RESEND GÖNDERİM HATASI:', JSON.stringify(error));
         } else {
-          console.log('✅ RESEND BAŞARILI: Mail Resend sunucularına iletildi', data);
+          console.log('✅ RESEND BAŞARILI:', data);
         }
       } catch (emailError) {
         console.error('❌ RESEND GÖNDERİM HATASI:', emailError instanceof Error ? emailError.message : emailError, emailError);
