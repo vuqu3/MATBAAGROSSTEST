@@ -3,7 +3,8 @@ import { auth } from '@/lib/auth';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'customer-files');
+const UPLOAD_BASE = process.env.UPLOAD_BASE_PATH || path.join(process.cwd(), 'public');
+const UPLOAD_DIR = path.join(UPLOAD_BASE, 'uploads', 'customer-files');
 const ALLOWED_TYPES = [
   'image/jpeg',
   'image/png',

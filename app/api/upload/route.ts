@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
+const UPLOAD_BASE = process.env.UPLOAD_BASE_PATH || path.join(process.cwd(), 'public');
+const UPLOAD_DIR = path.join(UPLOAD_BASE, 'uploads');
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 export async function POST(request: Request) {
