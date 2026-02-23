@@ -122,7 +122,7 @@ export default function ProductInfo({
                   }`}
                 >
                   {discount !== null && (
-                    <span className="absolute -top-2.5 -right-2 text-[10px] bg-green-500 text-white font-bold px-1.5 py-0.5 rounded-full leading-tight shadow-sm">
+                    <span className="absolute -top-2.5 -right-2 text-[10px] bg-orange-500 text-white font-bold px-1.5 py-0.5 rounded-full leading-tight shadow-sm">
                       %{discount} İndirim
                     </span>
                   )}
@@ -132,7 +132,7 @@ export default function ProductInfo({
                     {v.name}
                   </span>
                   <span className={`text-base font-bold mt-1 ${
-                    isSelected ? 'text-[#FF6000]' : 'text-gray-900'
+                    isSelected ? 'text-green-600' : 'text-green-600'
                   }`}>
                     {v.price.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL
                   </span>
@@ -199,7 +199,7 @@ export default function ProductInfo({
                       {isSelected && <Check className="h-4 w-4 flex-shrink-0" />}
                       {opt.label}
                       {opt.priceImpact > 0 && (
-                        <span className="text-[#f97316] text-xs">+{opt.priceImpact.toLocaleString('tr-TR')} TL</span>
+                        <span className="text-green-600 text-xs">+{opt.priceImpact.toLocaleString('tr-TR')} TL</span>
                       )}
                     </button>
                   );

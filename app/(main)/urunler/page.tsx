@@ -73,8 +73,8 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
     // %50+ indirimli ürünleri çek
     const allProducts = await prisma.product.findMany({
       where: {
-        status: 'APPROVED',
         isActive: true,
+        isPublished: true,
       },
       include: {
         category: {
@@ -128,11 +128,12 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
     // Stoktan hemen teslim ürünleri çek
     products = await prisma.product.findMany({
       where: {
-        status: 'APPROVED',
         isActive: true,
-        stock: {
-          gt: 0, // Stok miktarı 0'dan büyük olanlar
-        },
+        isPublished: true,
+        OR: [
+          { stock: { gt: 0 } },
+          { stockQuantity: { gt: 0 } },
+        ],
       },
       include: {
         category: {
@@ -166,8 +167,8 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
     // Ambalaj Gross - Birden fazla kategoriden ürünleri çek
     products = await prisma.product.findMany({
       where: {
-        status: 'APPROVED',
         isActive: true,
+        isPublished: true,
         category: {
           slug: {
             in: ['bardak-icecek-ambalajlari', 'gida-restoran-kutulari']
@@ -206,8 +207,8 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
     // Normal kategori filtresi
     products = await prisma.product.findMany({
       where: {
-        status: 'APPROVED',
         isActive: true,
+        isPublished: true,
         category: {
           slug: categorySlug,
         },
@@ -244,8 +245,8 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
     // Tüm ürünler
     products = await prisma.product.findMany({
       where: {
-        status: 'APPROVED',
         isActive: true,
+        isPublished: true,
       },
       include: {
         category: {

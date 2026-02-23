@@ -31,7 +31,7 @@ export async function GET(
           select: { id: true, name: true, slug: true }
         },
         variants: {
-          select: { id: true, name: true, price: true, stock: true },
+          select: { id: true, name: true, price: true, stock: true, sku: true },
           orderBy: { price: 'asc' },
         },
       },
@@ -55,14 +55,11 @@ export async function PATCH(
 ) {
   try {
     const session = await auth();
-    if (!session || session.user.role !== 'SELLER') {
+    if (!session || (session.user.role !== 'SELLER' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const vendor = await prisma.vendor.findUnique({
-      where: { ownerId: session.user.id },
-      select: { id: true },
-    });
+    const vendor = await resolveVendorForSession(session.user.id, session.user.role);
     if (!vendor) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
     }
@@ -89,7 +86,11 @@ export async function PATCH(
     if (body.basePrice !== undefined) updateData.basePrice = body.basePrice;
     if (body.compareAtPrice !== undefined) updateData.compareAtPrice = body.compareAtPrice;
     if (body.unitPrice !== undefined) updateData.unitPrice = body.unitPrice === null ? null : Number(body.unitPrice);
-    if (body.stock !== undefined) updateData.stock = body.stock;
+    if (body.stock !== undefined) {
+      const stockNum = Math.max(0, parseInt(String(body.stock ?? 0), 10) || 0);
+      updateData.stock = stockNum;
+      updateData.stockQuantity = stockNum;
+    }
     if (body.categoryId !== undefined) updateData.categoryId = body.categoryId;
     if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
     if (body.images !== undefined) updateData.images = body.images;
@@ -102,12 +103,13 @@ export async function PATCH(
     // Varyasyonları işle: gelen dizi varsa mevcut varyasyonları sil, yenilerini ekle
     const hasVariants = Array.isArray(body.variants);
     const validVariants = hasVariants
-      ? (body.variants as { name?: string; price?: unknown; stock?: unknown }[])
+      ? (body.variants as { name?: string; price?: unknown; stock?: unknown; sku?: unknown }[])
           .filter((v) => v.name?.trim() && !Number.isNaN(Number(v.price)))
           .map((v) => ({
             name: String(v.name).trim(),
             price: Number(v.price),
             stock: Math.max(0, parseInt(String(v.stock ?? 0), 10) || 0),
+            sku: v.sku && typeof v.sku === 'string' && v.sku.trim() ? String(v.sku).trim() : null,
           }))
       : [];
 
@@ -146,14 +148,11 @@ export async function DELETE(
 ) {
   try {
     const session = await auth();
-    if (!session || session.user.role !== 'SELLER') {
+    if (!session || (session.user.role !== 'SELLER' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const vendor = await prisma.vendor.findUnique({
-      where: { ownerId: session.user.id },
-      select: { id: true },
-    });
+    const vendor = await resolveVendorForSession(session.user.id, session.user.role);
     if (!vendor) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
     }

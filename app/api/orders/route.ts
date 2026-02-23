@@ -135,7 +135,63 @@ export async function POST(request: Request) {
 
     const productVendorMap = Object.fromEntries(products.map((p: { id: string; vendorId: string | null }) => [p.id, p.vendorId]));
 
-    const order = await prisma.order.create({
+    // Stock validation and order creation in a transaction
+    const order = await prisma.$transaction(async (tx) => {
+      // 1. Validate stock for all items
+      const productIds = [...new Set(items.map((i) => i.productId))];
+      const productsWithStock = await tx.product.findMany({
+        where: { id: { in: productIds } },
+        select: {
+          id: true,
+          stock: true,
+          stockQuantity: true,
+          variants: {
+            select: {
+              id: true,
+              name: true,
+              stock: true,
+            },
+          },
+        },
+      });
+
+      for (const item of items) {
+        const product = productsWithStock.find((p) => p.id === item.productId);
+        if (!product) {
+          throw new Error(`Ürün bulunamadı: ${item.productId}`);
+        }
+
+        const requestedQuantity = Math.max(1, Math.floor(Number(item.quantity) || 0));
+        
+        // Check if item has variant selected
+        const options = item.options as Record<string, any> | undefined;
+        const selectedVariantId = options?.variantId;
+        const selectedVariantName = options?.variantName;
+        
+        if (selectedVariantId || selectedVariantName) {
+          // Find the variant
+          const variant = product.variants.find(
+            (v) => v.id === selectedVariantId || v.name === selectedVariantName
+          );
+          
+          if (!variant) {
+            throw new Error(`Varyasyon bulunamadı: ${selectedVariantId || selectedVariantName}`);
+          }
+          
+          if (variant.stock < requestedQuantity) {
+            throw new Error(`"${item.productName}" ürününün "${variant.name}" varyasyonu için yetersiz stok. Mevcut: ${variant.stock}, İstenen: ${requestedQuantity}`);
+          }
+        } else {
+          // Check main product stock
+          const availableStock = product.stock ?? product.stockQuantity ?? 0;
+          if (availableStock < requestedQuantity) {
+            throw new Error(`"${item.productName}" ürünü için yetersiz stok. Mevcut: ${availableStock}, İstenen: ${requestedQuantity}`);
+          }
+        }
+      }
+
+      // 2. Create the order
+      const createdOrder = await tx.order.create({
       data: {
         barcode,
         userId: session.user.id,
@@ -162,6 +218,66 @@ export async function POST(request: Request) {
         items: true,
         user: { select: { name: true, email: true } },
       },
+      });
+
+      // 3. Update stock for each item
+      for (const item of items) {
+        const product = productsWithStock.find((p) => p.id === item.productId);
+        if (!product) continue;
+
+        const requestedQuantity = Math.max(1, Math.floor(Number(item.quantity) || 0));
+        
+        // Check if item has variant selected
+        const options = item.options as Record<string, any> | undefined;
+        const selectedVariantId = options?.variantId;
+        const selectedVariantName = options?.variantName;
+        
+        if (selectedVariantId || selectedVariantName) {
+          // Update variant stock
+          const variant = product.variants.find(
+            (v) => v.id === selectedVariantId || v.name === selectedVariantName
+          );
+          
+          if (variant) {
+            await tx.productVariant.update({
+              where: { id: variant.id },
+              data: {
+                stock: {
+                  decrement: requestedQuantity,
+                },
+              },
+            });
+            
+            // Also update main product stock if needed
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  decrement: requestedQuantity,
+                },
+                stockQuantity: {
+                  decrement: requestedQuantity,
+                },
+              },
+            });
+          }
+        } else {
+          // Update main product stock
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stock: {
+                decrement: requestedQuantity,
+              },
+              stockQuantity: {
+                decrement: requestedQuantity,
+              },
+            },
+          });
+        }
+      }
+
+      return createdOrder;
     });
 
     // Send order confirmation email — non-blocking, never cancels the order
@@ -222,6 +338,14 @@ export async function POST(request: Request) {
     return NextResponse.json(order);
   } catch (error) {
     console.error('Orders POST error:', error);
+    
+    // Handle stock validation errors specifically
+    if (error instanceof Error) {
+      if (error.message.includes('yetersiz stok') || error.message.includes('bulunamadı')) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+    }
+    
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

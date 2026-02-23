@@ -169,10 +169,11 @@ export async function POST(request: Request) {
       const validVariants = Array.isArray(bodyVariants)
         ? bodyVariants
             .filter((v: { name?: string; price?: unknown }) => v.name?.trim() && !Number.isNaN(Number(v.price)))
-            .map((v: { name: string; price: unknown; stock?: unknown }) => ({
+            .map((v: { name: string; price: unknown; stock?: unknown; sku?: unknown }) => ({
               name: String(v.name).trim(),
               price: Number(v.price),
               stock: Math.max(0, parseInt(String(v.stock ?? 0), 10) || 0),
+              sku: v.sku && typeof v.sku === 'string' && v.sku.trim() ? String(v.sku).trim() : null,
             }))
         : [];
 

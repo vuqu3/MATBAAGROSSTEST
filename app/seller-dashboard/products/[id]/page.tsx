@@ -61,11 +61,11 @@ export default function SellerEditProductPage({ params }: { params: Promise<{ id
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<ImageItem[]>([]);
 
-  type VariantRow = { id: string; name: string; price: string; stock: string };
+  type VariantRow = { id: string; name: string; price: string; stock: string; sku: string };
   const [variants, setVariants] = useState<VariantRow[]>([]);
 
   const addVariant = () =>
-    setVariants((v) => [...v, { id: crypto.randomUUID(), name: '', price: '', stock: '' }]);
+    setVariants((v) => [...v, { id: crypto.randomUUID(), name: '', price: '', stock: '', sku: '' }]);
   const removeVariant = (vid: string) =>
     setVariants((v) => v.filter((r) => r.id !== vid));
   const updateVariant = (vid: string, field: keyof Omit<VariantRow, 'id'>, value: string) =>
@@ -144,6 +144,7 @@ export default function SellerEditProductPage({ params }: { params: Promise<{ id
               name: v.name,
               price: v.price.toString(),
               stock: v.stock.toString(),
+              sku: v.sku || '',
             }))
           );
         }
@@ -234,6 +235,7 @@ export default function SellerEditProductPage({ params }: { params: Promise<{ id
               name: v.name.trim(),
               price: parseFloat(v.price),
               stock: Math.max(0, parseInt(v.stock, 10) || 0),
+              sku: v.sku.trim() || null,
             })),
         }),
       });
@@ -602,14 +604,15 @@ export default function SellerEditProductPage({ params }: { params: Promise<{ id
           ) : (
             <div className="space-y-3">
               <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-1">
-                <div className="col-span-5">Seçenek Adı</div>
-                <div className="col-span-3">Fiyat (TL)</div>
-                <div className="col-span-3">Stok</div>
+                <div className="col-span-4">Seçenek Adı</div>
+                <div className="col-span-2">Fiyat (TL)</div>
+                <div className="col-span-2">Stok</div>
+                <div className="col-span-3">Stok Kodu (SKU)</div>
                 <div className="col-span-1"></div>
               </div>
               {variants.map((row) => (
                 <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-5">
+                  <div className="col-span-4">
                     <input
                       type="text"
                       value={row.name}
@@ -618,7 +621,7 @@ export default function SellerEditProductPage({ params }: { params: Promise<{ id
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                     />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <input
                       type="number"
                       min="0"
@@ -629,13 +632,22 @@ export default function SellerEditProductPage({ params }: { params: Promise<{ id
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                     />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <input
                       type="number"
                       min="0"
                       value={row.stock}
                       onChange={(e) => updateVariant(row.id, 'stock', e.target.value)}
                       placeholder="0"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <input
+                      type="text"
+                      value={row.sku}
+                      onChange={(e) => updateVariant(row.id, 'sku', e.target.value)}
+                      placeholder="opsiyonel"
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                     />
                   </div>

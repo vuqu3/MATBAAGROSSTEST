@@ -39,6 +39,16 @@ export async function GET(request: Request) {
         stockQuantity: true,
         category: { select: { id: true, name: true, slug: true } },
         createdAt: true,
+        variants: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            stock: true,
+            sku: true,
+          },
+          orderBy: { name: 'asc' },
+        },
       },
     }),
     prisma.product.count({ where: { vendorId: vendor.id } }),

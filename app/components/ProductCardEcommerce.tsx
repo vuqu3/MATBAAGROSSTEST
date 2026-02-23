@@ -89,7 +89,7 @@ export default function ProductCardEcommerce({
             className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 p-1"
           />
           {effectiveDiscount != null && effectiveDiscount > 0 && (
-            <div className="absolute top-1 left-1 bg-red-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold z-10">
+            <div className="absolute top-1 left-1 bg-orange-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold z-10">
               %{effectiveDiscount}
             </div>
           )}
@@ -131,12 +131,12 @@ export default function ProductCardEcommerce({
                 <span className="text-xs text-gray-500 line-through">
                   {effectiveOriginalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
                 </span>
-                <span className="text-sm font-semibold text-[#FF6000]">
+                <span className="text-sm font-semibold text-green-600">
                   {price.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
                 </span>
               </div>
             ) : (
-              <span className="text-sm font-semibold text-[#484848]">
+              <span className="text-sm font-semibold text-green-600">
                 {price.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
               </span>
             )}
@@ -145,7 +145,7 @@ export default function ProductCardEcommerce({
             <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded ${
               isReady 
                 ? isInStock 
-                  ? 'bg-green-100 text-green-700' 
+                  ? 'bg-orange-100 text-orange-600' 
                   : 'bg-red-100 text-red-700'
                 : 'bg-[#0f766e]/10 text-[#0f766e]'
             }`}>

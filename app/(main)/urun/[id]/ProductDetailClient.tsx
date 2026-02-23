@@ -79,6 +79,19 @@ export default function ProductDetailClient({
   const mainImageUrl = imageList[0] || '/placeholder-product.svg';
 
   const handleAddToCart = () => {
+    const baseOptions = Object.fromEntries(
+      Object.entries(selections).filter(([, opt]) => opt?.label).map(([k, v]) => [k, v!.label])
+    );
+    
+    // Add variant information if selected
+    const optionsWithVariant = selectedVariant 
+      ? { 
+          ...baseOptions, 
+          variantId: selectedVariant.id,
+          variantName: selectedVariant.name,
+        }
+      : baseOptions;
+
     addItem({
       productId: product.id,
       name: selectedVariant ? `${product.name} - ${selectedVariant.name}` : product.name,
@@ -86,9 +99,7 @@ export default function ProductDetailClient({
       quantity,
       unitPrice,
       totalPrice: unitPrice * quantity,
-      options: Object.fromEntries(
-        Object.entries(selections).filter(([, opt]) => opt?.label).map(([k, v]) => [k, v!.label])
-      ),
+      options: optionsWithVariant,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);

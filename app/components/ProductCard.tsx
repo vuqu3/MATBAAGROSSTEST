@@ -22,7 +22,7 @@ export default function ProductCard({ id, name, image, basePrice, compareAtPrice
       <Link href={`/urun/${id}`}>
         <div className="relative w-full h-64 bg-gray-100">
           {discount != null && discount > 0 && (
-            <div className="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 rounded text-xs font-bold z-10">
+            <div className="absolute top-2 left-2 bg-orange-500 text-white px-2 py-1 rounded text-xs font-bold z-10">
               %{discount} İndirim
             </div>
           )}
@@ -53,13 +53,13 @@ export default function ProductCard({ id, name, image, basePrice, compareAtPrice
               <span className="text-sm text-gray-500 line-through">
                 {compareAtPrice.toLocaleString('tr-TR')} TL
               </span>
-              <span className="text-lg font-bold text-[#1e3a8a]">
+              <span className="text-lg font-bold text-green-600">
                 {basePrice.toLocaleString('tr-TR')} TL
               </span>
             </div>
           ) : basePrice ? (
             <p className="text-sm text-gray-600">
-              Başlangıç: <span className="font-bold text-[#1e3a8a]">{basePrice.toLocaleString('tr-TR')} TL</span>
+              Başlangıç: <span className="font-bold text-green-600">{basePrice.toLocaleString('tr-TR')} TL</span>
             </p>
           ) : null}
         </div>

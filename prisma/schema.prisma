@@ -243,6 +243,7 @@ model ProductVariant {
   name      String   // Örn: "25 Adet", "100 Adet"
   price     Float
   stock     Int      @default(0)
+  sku       String?  // Varyasyon özel stok kodu (opsiyonel)
   createdAt DateTime @default(now())
 
   @@map("product_variants")

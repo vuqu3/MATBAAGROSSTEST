@@ -38,7 +38,7 @@ export default function ProductActionCard({
     <div className="lg:sticky lg:top-24 self-start w-full max-w-[380px] bg-white border border-gray-200 rounded-2xl shadow-xl p-4">
       {/* 1. Fiyat alanı — kompakt, yeşil ve okunaklı */}
       <div>
-        <p className="text-3xl font-bold text-[#16a34a] tracking-tight">
+        <p className="text-3xl font-bold text-green-600 tracking-tight">
           {unitPrice.toLocaleString('tr-TR')} <span className="text-xl font-semibold">TL</span>
         </p>
         <p className="text-xs text-gray-500 mt-0.5">KDV Dahil</p>
@@ -69,7 +69,7 @@ export default function ProductActionCard({
         </div>
         <div className="text-right">
           <p className="text-xs text-gray-500">Toplam</p>
-          <p className="text-lg font-bold text-[#16a34a]">{totalPrice.toLocaleString('tr-TR')} TL</p>
+          <p className="text-lg font-bold text-green-600">{totalPrice.toLocaleString('tr-TR')} TL</p>
         </div>
       </div>
       {minOrderQuantity != null && minOrderQuantity > 1 && (
