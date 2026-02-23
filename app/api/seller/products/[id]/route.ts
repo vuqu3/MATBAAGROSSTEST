@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveVendorForSession } from '@/lib/getMatbaaGrossVendor';
@@ -134,6 +135,11 @@ export async function PATCH(
       },
     });
 
+    revalidatePath(`/urun/${id}`);
+    revalidatePath('/urunler', 'page');
+    revalidatePath('/', 'layout');
+    revalidatePath('/seller-dashboard/products', 'page');
+
     return NextResponse.json(product);
   } catch (error) {
     console.error('Seller Product PATCH error:', error);
@@ -175,6 +181,10 @@ export async function DELETE(
     await prisma.product.delete({
       where: { id },
     });
+
+    revalidatePath('/urunler', 'page');
+    revalidatePath('/', 'layout');
+    revalidatePath('/seller-dashboard/products', 'page');
 
     return NextResponse.json({ success: true });
   } catch (error) {

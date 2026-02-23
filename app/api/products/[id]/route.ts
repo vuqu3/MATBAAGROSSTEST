@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -110,6 +111,11 @@ export async function PATCH(
       },
     });
 
+    revalidatePath(`/urun/${id}`);
+    revalidatePath('/urunler', 'page');
+    revalidatePath('/', 'layout');
+    revalidatePath('/seller-dashboard/products', 'page');
+
     return NextResponse.json(updated);
   } catch (error: unknown) {
     console.error('Product PATCH error:', error);
@@ -154,6 +160,10 @@ export async function DELETE(
     await prisma.product.delete({
       where: { id },
     });
+
+    revalidatePath('/urunler', 'page');
+    revalidatePath('/', 'layout');
+    revalidatePath('/seller-dashboard/products', 'page');
 
     return NextResponse.json(
       { message: 'Ürün başarıyla silindi' },
