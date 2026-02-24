@@ -20,6 +20,8 @@ export async function GET(request: Request) {
       select: {
         barcode: true,
         status: true,
+        paymentStatus: true,
+        paymentMethod: true,
         createdAt: true,
         updatedAt: true,
         trackingNumber: true,

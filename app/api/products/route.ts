@@ -10,6 +10,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const idsParam = searchParams.get('ids');
     const limitParam = searchParams.get('limit');
+    const purposeParam = (searchParams.get('purpose') || '').toLowerCase();
+    const takeParam = searchParams.get('take');
     const ids = idsParam ? idsParam.split(',').map((id) => id.trim()).filter(Boolean) : [];
 
     console.log('PRODUCTS_GET_REQUEST:', { idsParam, limitParam, idsLength: ids.length });
@@ -20,6 +22,13 @@ export async function GET(request: Request) {
           id: { in: ids },
           isPublished: true,
           isActive: true,
+          imageUrl: { not: null, not: '' },
+          NOT: [
+            { imageUrl: { contains: 'placeholder' } },
+            { imageUrl: { contains: 'no-image' } },
+            { imageUrl: { contains: 'noimage' } },
+            { imageUrl: { contains: 'default' } },
+          ],
           OR: [
             { vendorId: null },
             { vendor: { isBlocked: false } },
@@ -77,8 +86,11 @@ export async function GET(request: Request) {
     }
 
     // Normal ana sayfa isteği
+    const take = Math.min(48, Math.max(1, parseInt(takeParam ?? '', 10) || 8));
+    const filterForRealImages = purposeParam === 'related' || purposeParam === 'recommendations';
+
     const products = await prisma.product.findMany({
-      take: 8,
+      take,
       orderBy: { createdAt: 'desc' },
       include: {
         category: { select: { id: true, name: true, slug: true } },
@@ -86,6 +98,17 @@ export async function GET(request: Request) {
       where: {
         isPublished: true,
         isActive: true,
+        ...(filterForRealImages
+          ? {
+              imageUrl: { not: null, not: '' },
+              NOT: [
+                { imageUrl: { contains: 'placeholder' } },
+                { imageUrl: { contains: 'no-image' } },
+                { imageUrl: { contains: 'noimage' } },
+                { imageUrl: { contains: 'default' } },
+              ],
+            }
+          : {}),
         OR: [
           { vendorId: null },
           { vendor: { isBlocked: false } },
@@ -206,6 +229,7 @@ export async function POST(request: Request) {
           variants: true,
         },
       });
+      revalidatePath(`/urun/${product.id}`, 'page');
       revalidatePath('/urunler', 'page');
       revalidatePath('/', 'layout');
       revalidatePath('/seller-dashboard/products', 'page');
@@ -353,6 +377,7 @@ export async function POST(request: Request) {
       },
     });
 
+    revalidatePath(`/urun/${product.id}`, 'page');
     revalidatePath('/urunler', 'page');
     revalidatePath('/', 'layout');
 

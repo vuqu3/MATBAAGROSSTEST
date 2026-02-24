@@ -206,7 +206,19 @@ export default function SellerNewProductPage() {
           fd.append('file', item);
           const up = await fetch('/api/upload', { method: 'POST', body: fd });
           const data = await up.json().catch(() => ({}));
-          if (up.ok && data.url) uploadedUrls.push(data.url);
+          if (!up.ok) {
+            setError((data as { error?: string })?.error || 'Görsel yüklenirken bir hata oluştu.');
+            setSubmitting(false);
+            return;
+          }
+
+          if (!(data as { url?: string })?.url) {
+            setError('Görsel yüklenirken bir hata oluştu.');
+            setSubmitting(false);
+            return;
+          }
+
+          uploadedUrls.push((data as { url: string }).url);
         } catch {
           setError('Görsel yüklenirken bir hata oluştu.');
           setSubmitting(false);

@@ -51,6 +51,7 @@ model User {
   updatedAt     DateTime    @updatedAt
   addresses     Address[]
   orders          Order[]
+  reviews         Review[]
   supportTickets  SupportTicket[]
   vendor          Vendor?   // Satıcı hesabı (bir kullanıcı en fazla bir satıcıya sahip olabilir)
 
@@ -103,18 +104,34 @@ enum OrderStatus {
 
 enum PaymentStatus {
   AWAITING_PAYMENT  // Ödeme bekleniyor
+  PAID              // Ödeme alındı
+}
+
+enum PaymentMethod {
+  CARD
+  BANK_TRANSFER
 }
 
 model Order {
   id            String        @id @default(cuid())
   barcode       String?       @unique // MG-2024-X892 formatında benzersiz barkod (yeni siparişlerde otomatik)
-  userId        String
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  addressId     String        // Teslimat adresi
-  address       Address       @relation(fields: [addressId], references: [id])
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addressId     String?       // Üye siparişleri için teslimat adresi
+  address       Address?      @relation(fields: [addressId], references: [id])
+
+  // Guest checkout için iletişim ve teslimat alanları
+  guestEmail      String?
+  guestPhone      String?
+  guestFirstName  String?
+  guestLastName   String?
+  guestCity       String?
+  guestDistrict   String?
+  guestAddress    String?
   totalAmount   Float
   status        OrderStatus   @default(PENDING)
   paymentStatus PaymentStatus @default(AWAITING_PAYMENT)
+  paymentMethod PaymentMethod @default(CARD)
   invoiceUrl      String?       // Satıcının yüklediği fatura PDF linki
   trackingNumber  String?       // Kargo takip numarası
   shippingCompany String?       // Kargo firması adı (Yurtiçi, Aras, MNG vb.)
@@ -232,8 +249,24 @@ model Product {
   updatedAt         DateTime    @updatedAt
   featuredWidgets   FeaturedWidget[]
   variants          ProductVariant[]
+  reviews           Review[]
 
   @@map("products")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, userId])
+  @@map("reviews")
 }
 
 model ProductVariant {
@@ -454,6 +487,16 @@ model Banner {
   updatedAt DateTime @updatedAt
   
   @@map("banners")
+}
+
+model StoreSettings {
+  id                   String   @id @default(cuid())
+  shippingFee          Float    @default(25)
+  freeShippingThreshold Float   @default(1500)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("store_settings")
 }
 
 // FeaturedWidget Model - Öne çıkan ürünler için

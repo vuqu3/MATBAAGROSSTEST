@@ -27,7 +27,7 @@ export async function GET(request: Request) {
         subtitle: true,
         link: true,
         order: true,
-        isActive: adminMode, // Sadece admin modunda göster
+        isActive: true,
         createdAt: adminMode, // Sadece admin modunda göster
         updatedAt: adminMode, // Sadece admin modunda göster
       },

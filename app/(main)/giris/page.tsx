@@ -144,6 +144,14 @@ function LoginPageInner() {
             </button>
           </form>
 
+          <button
+            type="button"
+            onClick={() => router.push('/sepetim/onay?guest=true')}
+            className="w-full mt-3 py-4 bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold rounded-lg transition-colors text-base"
+          >
+            Üye Olmadan Devam Et
+          </button>
+
           <p className="text-sm text-gray-500 text-center mt-6">
             Hesabın yok mu?{' '}
             <Link href="/kayit-ol" className="font-semibold text-[#FF6000] hover:text-[#e55a00]">

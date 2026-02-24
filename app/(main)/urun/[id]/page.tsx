@@ -58,6 +58,25 @@ export default function ProductPage({ params }: PageProps) {
 
   useEffect(() => {
     let cancelled = false;
+    const isRealImageUrl = (url: unknown) => {
+      if (typeof url !== 'string') return false;
+      const u = url.trim();
+      if (!u) return false;
+      const lower = u.toLowerCase();
+      if (lower.includes('placeholder')) return false;
+      if (lower.includes('no-image')) return false;
+      if (lower.includes('noimage')) return false;
+      if (lower.includes('default')) return false;
+      if (lower.endsWith('/placeholder-product.svg')) return false;
+      return true;
+    };
+
+    const hasRealImage = (p: any) => {
+      if (isRealImageUrl(p?.imageUrl)) return true;
+      const arr = Array.isArray(p?.images) ? p.images : [];
+      return arr.some((u: unknown) => isRealImageUrl(u));
+    };
+
     setLoading(true);
     setNotFound(false);
     setRelatedProducts([]);
@@ -83,14 +102,18 @@ export default function ProductPage({ params }: PageProps) {
           const resRelated = await fetch(`/api/products?ids=${relatedIds.join(',')}`);
           if (resRelated.ok) {
             const related = await resRelated.json();
-            if (!cancelled) setRelatedProducts(Array.isArray(related) ? related : []);
+            const filtered = (Array.isArray(related) ? related : []).filter(hasRealImage);
+            if (!cancelled) setRelatedProducts(filtered);
           }
         }
 
-        const resRec = await fetch('/api/products');
+        const resRec = await fetch('/api/products?purpose=related&take=36');
         if (resRec.ok) {
           const all = await resRec.json();
-          const rec = (Array.isArray(all) ? all : []).filter((p: { id: string }) => p.id !== data.id).slice(0, 12);
+          const rec = (Array.isArray(all) ? all : [])
+            .filter((p: { id: string }) => p.id !== data.id)
+            .filter(hasRealImage)
+            .slice(0, 12);
           if (!cancelled) setRecommendedProducts(rec);
         }
       })

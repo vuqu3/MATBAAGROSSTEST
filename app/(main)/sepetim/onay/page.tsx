@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCart } from '@/context/CartContext';
@@ -61,10 +62,17 @@ interface CardForm {
   cvv: string;
 }
 
-export default function OnayPage() {
+type PaymentMethod = 'CARD' | 'BANK_TRANSFER';
+
+function OnayPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
-  const { items, totalAmount, shippingCost, grandTotal, hasFreeShipping, clearCart } = useCart();
+  const { items, totalAmount, shippingCost, grandTotal, hasFreeShipping, clearCart, shippingFee, freeShippingThreshold } = useCart();
+
+  const isGuest = !session?.user?.id || searchParams.get('guest') === 'true';
+
+  const [guestEmail, setGuestEmail] = useState('');
 
   const [addressForm, setAddressForm] = useState<AddressForm>({
     firstName: '',
@@ -81,6 +89,8 @@ export default function OnayPage() {
     expiry: '',
     cvv: '',
   });
+
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CARD');
 
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'form' | 'processing' | 'done'>('form');
@@ -190,10 +200,12 @@ export default function OnayPage() {
       return true;
     }
     // New address validation
+    const emailOk = !isGuest || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim());
     return (
       addressForm.firstName.trim() &&
       addressForm.lastName.trim() &&
       addressForm.phone.trim() &&
+      emailOk &&
       addressForm.city.trim() &&
       addressForm.district.trim() &&
       addressForm.address.trim()
@@ -201,10 +213,26 @@ export default function OnayPage() {
   };
 
   const isCardValid =
-    cardForm.cardName.trim() &&
+    cardForm.cardName.trim().length >= 2 &&
     cardForm.cardNumber.replace(/\s/g, '').length === 16 &&
     cardForm.expiry.length === 5 &&
     cardForm.cvv.length === 3;
+
+  const transferDiscountEligible = paymentMethod === 'BANK_TRANSFER' && !isGuest;
+  const transferDiscount = transferDiscountEligible ? totalAmount * 0.05 : 0;
+  const discountedSubtotal = Math.max(0, totalAmount - transferDiscount);
+  const effectiveHasFreeShipping = discountedSubtotal >= freeShippingThreshold;
+  const effectiveShippingCost = effectiveHasFreeShipping ? 0 : shippingFee;
+  const effectiveGrandTotal = discountedSubtotal + effectiveShippingCost;
+
+  const canSubmit =
+    !loading &&
+    cartReady &&
+    items.length > 0 &&
+    isAddressValid() &&
+    agreedToTerms &&
+    (paymentMethod !== 'CARD' || Boolean(isCardValid)) &&
+    !(isGuest && paymentMethod === 'BANK_TRANSFER');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,7 +241,11 @@ export default function OnayPage() {
       return;
     }
     setTermsError(false);
-    if (!isAddressValid() || !isCardValid || items.length === 0) return;
+    if (isGuest && paymentMethod === 'BANK_TRANSFER') {
+      router.push('/login');
+      return;
+    }
+    if (!isAddressValid() || (paymentMethod === 'CARD' && !isCardValid) || items.length === 0) return;
 
     setLoading(true);
     setStep('processing');
@@ -222,7 +254,7 @@ export default function OnayPage() {
       let resolvedAddressId = selectedAddressId;
 
       // If user filled in a new address form, save it to DB first to get a real ID
-      if (showNewAddressForm && !selectedAddressId) {
+      if (!isGuest && showNewAddressForm && !selectedAddressId) {
         if (!addressForm.city.trim() || !addressForm.address.trim()) {
           throw new Error('Lütfen adres bilgilerini eksiksiz doldurun');
         }
@@ -246,13 +278,29 @@ export default function OnayPage() {
         resolvedAddressId = savedAddr.id;
       }
 
-      if (!resolvedAddressId) {
+      if (!isGuest && !resolvedAddressId) {
         throw new Error('Lütfen bir teslimat adresi seçin');
+      }
+
+      if (isGuest) {
+        const email = guestEmail.trim();
+        const phoneOk = addressForm.phone.replace(/\D/g, '').length >= 10;
+        const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        if (!emailOk) throw new Error('Geçerli bir e-posta adresi giriniz');
+        if (!phoneOk) throw new Error('Geçerli bir telefon numarası giriniz');
       }
 
       // Prepare order data
       const orderData = {
-        addressId: resolvedAddressId,
+        ...(isGuest ? {} : { addressId: resolvedAddressId }),
+        paymentMethod: isGuest ? 'CARD' : paymentMethod,
+        guestEmail: isGuest ? guestEmail.trim() : undefined,
+        guestPhone: isGuest ? addressForm.phone.trim() : undefined,
+        guestFirstName: isGuest ? addressForm.firstName.trim() : undefined,
+        guestLastName: isGuest ? addressForm.lastName.trim() : undefined,
+        guestCity: isGuest ? addressForm.city.trim() : undefined,
+        guestDistrict: isGuest ? addressForm.district.trim() : undefined,
+        guestAddress: isGuest ? addressForm.address.trim() : undefined,
         items: items.map(item => ({
           productId: item.productId,
           productName: item.name,
@@ -368,6 +416,11 @@ export default function OnayPage() {
 
                 {/* Saved Addresses */}
                 <div className="p-5">
+                  {isGuest ? (
+                    <div className="border border-orange-200 bg-orange-50 rounded-lg p-3 mb-4 text-sm text-orange-800">
+                      Üye olmadan devam ediyorsunuz. Lütfen teslimat bilgilerinizi ve iletişim bilgilerinizi eksiksiz girin.
+                    </div>
+                  ) : null}
                   {addressesLoading ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 size={20} className="animate-spin text-gray-400" />
@@ -375,6 +428,7 @@ export default function OnayPage() {
                     </div>
                   ) : (
                     <>
+                      {!isGuest ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                         {savedAddresses.map((address) => (
                           <button
@@ -429,6 +483,8 @@ export default function OnayPage() {
                         </button>
                       </div>
 
+                      ) : null}
+
                       {/* Selected Address Display */}
                       {selectedAddressId && !showNewAddressForm && (() => {
                         const selectedAddr = getSelectedAddress();
@@ -449,10 +505,23 @@ export default function OnayPage() {
                   )}
 
                   {/* New Address Form */}
-                  {showNewAddressForm && (
+                  {(isGuest || showNewAddressForm) && (
                     <div className="border-t border-gray-100 pt-4">
                       <h3 className="font-medium text-sm text-gray-800 mb-3">Yeni Adres Bilgileri</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {isGuest && (
+                          <div className="sm:col-span-2">
+                            <label className={labelClass}>E-posta</label>
+                            <input
+                              type="email"
+                              className={inputClass}
+                              placeholder="ornek@email.com"
+                              value={guestEmail}
+                              onChange={(e) => setGuestEmail(e.target.value)}
+                              required
+                            />
+                          </div>
+                        )}
                         <div>
                           <label className={labelClass}>Ad</label>
                           <input
@@ -526,6 +595,7 @@ export default function OnayPage() {
                               checked={saveAddress}
                               onChange={(e) => setSaveAddress(e.target.checked)}
                               className="w-4 h-4 text-[#FF6000] border-gray-300 rounded focus:ring-[#FF6000] focus:ring-2"
+                              disabled={isGuest}
                             />
                             <span className="text-sm text-gray-700">
                               Bu adresi sonraki alışverişlerim için kaydet
@@ -561,7 +631,69 @@ export default function OnayPage() {
                 </div>
 
                 <div className="p-5 space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('CARD')}
+                      className={`px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
+                        paymentMethod === 'CARD'
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Kredi Kartı
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod('BANK_TRANSFER');
+                      }}
+                      className={`px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
+                        paymentMethod === 'BANK_TRANSFER'
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Havale / EFT
+                    </button>
+                  </div>
+
+                  {paymentMethod === 'BANK_TRANSFER' ? (
+                    <div className="border border-orange-200 bg-orange-50 rounded-xl p-4">
+                      {isGuest ? (
+                        <div className="text-sm text-gray-800">
+                          Üye olarak EFT / Havale işleminizi gerçekleştirebilirsiniz ve %5 indirimden faydalanabilirsiniz.
+                          <div className="mt-2">
+                            <Link href="/login" className="text-sm font-semibold text-[#FF6000] underline underline-offset-2">
+                              Giriş Yap
+                            </Link>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="text-sm font-bold text-gray-900 mb-3">Banka Bilgileri</div>
+                          <div className="space-y-1.5 text-sm text-gray-800">
+                            <div>
+                              <span className="font-semibold">Alıcı:</span> SB OFSET VE MATBAACILIK SANAYİ TİCARET LİMİTED ŞİRKETİ
+                            </div>
+                            <div>
+                              <span className="font-semibold">Banka:</span> YAPI VE KREDİ BANKASI A.Ş.
+                            </div>
+                            <div>
+                              <span className="font-semibold">IBAN:</span>{' '}
+                              <span className="font-mono">TR070006701000000030742376</span>
+                            </div>
+                          </div>
+                          <div className="mt-3 text-xs text-orange-900">
+                            Siparişi tamamladıktan sonra size verilecek olan Sipariş Numarasını, havale/EFT işleminde açıklama kısmına yazmayı unutmayınız.
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : null}
+
                   {/* Card preview strip */}
+                  {paymentMethod === 'CARD' ? (
                   <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-4 text-white relative overflow-hidden">
                     <div className="absolute inset-0 opacity-10"
                       style={{
@@ -595,7 +727,9 @@ export default function OnayPage() {
                       </div>
                     </div>
                   </div>
+                  ) : null}
 
+                  {paymentMethod === 'CARD' ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
                       <label className={labelClass}>Kart Üzerindeki İsim</label>
@@ -605,7 +739,7 @@ export default function OnayPage() {
                         placeholder="AD SOYAD"
                         value={cardForm.cardName}
                         onChange={(e) => handleCardChange('cardName', e.target.value.toUpperCase())}
-                        required
+                        required={paymentMethod === 'CARD'}
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -617,7 +751,7 @@ export default function OnayPage() {
                         value={cardForm.cardNumber}
                         onChange={(e) => handleCardChange('cardNumber', e.target.value)}
                         maxLength={19}
-                        required
+                        required={paymentMethod === 'CARD'}
                       />
                     </div>
                     <div>
@@ -629,7 +763,7 @@ export default function OnayPage() {
                         value={cardForm.expiry}
                         onChange={(e) => handleCardChange('expiry', e.target.value)}
                         maxLength={5}
-                        required
+                        required={paymentMethod === 'CARD'}
                       />
                     </div>
                     <div>
@@ -642,20 +776,23 @@ export default function OnayPage() {
                           value={cardForm.cvv}
                           onChange={(e) => handleCardChange('cvv', e.target.value)}
                           maxLength={3}
-                          required
+                          required={paymentMethod === 'CARD'}
                         />
                         <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       </div>
                     </div>
                   </div>
+                  ) : null}
 
                   {/* Security note */}
+                  {paymentMethod === 'CARD' ? (
                   <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
                     <Lock size={13} className="text-green-600 flex-shrink-0" />
                     <p className="text-xs text-green-700">
                       Kart bilgileriniz 256-bit SSL şifreleme ile korunmaktadır. Bilgileriniz hiçbir şekilde saklanmaz.
                     </p>
                   </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -705,6 +842,10 @@ export default function OnayPage() {
 
                 {/* Totals */}
                 <div className="px-5 py-4 border-t border-gray-100 space-y-2.5">
+                  <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                    <span className="text-xs font-semibold text-green-700">EFT / Havale işlemlerinizde %5 indirim!</span>
+                    <CheckCircle size={14} className="text-green-600" />
+                  </div>
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>Ara Toplam</span>
                     <span className="font-medium">{totalAmount.toLocaleString('tr-TR')} TL</span>
@@ -714,16 +855,24 @@ export default function OnayPage() {
                       <Truck size={13} className="text-gray-400" />
                       Kargo
                     </span>
-                    {hasFreeShipping ? (
+                    {effectiveHasFreeShipping ? (
                       <span className="text-green-600 font-semibold text-xs">ÜCRETSİZ</span>
                     ) : (
-                      <span className="font-medium">{shippingCost.toLocaleString('tr-TR')} TL</span>
+                      <span className="font-medium">{effectiveShippingCost.toLocaleString('tr-TR')} TL</span>
                     )}
                   </div>
+
+                  {transferDiscountEligible ? (
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Havale / EFT İndirimi (%5)</span>
+                      <span className="font-semibold text-green-700">- {transferDiscount.toLocaleString('tr-TR')} TL</span>
+                    </div>
+                  ) : null}
+
                   <div className="border-t border-dashed border-gray-200 pt-2.5 flex justify-between">
                     <span className="font-bold text-gray-900">Toplam</span>
                     <span className="font-bold text-[#FF6000] text-lg">
-                      {grandTotal.toLocaleString('tr-TR')} TL
+                      {effectiveGrandTotal.toLocaleString('tr-TR')} TL
                     </span>
                   </div>
                 </div>
@@ -772,7 +921,7 @@ export default function OnayPage() {
                   )}
                   <button
                     type="submit"
-                    disabled={loading || !cartReady || items.length === 0 || !isAddressValid() || !isCardValid || !agreedToTerms}
+                    disabled={!canSubmit}
                     className="w-full py-3.5 rounded-xl font-bold text-sm text-white transition-all
                       bg-gradient-to-r from-[#FF6000] to-[#ea580c]
                       hover:from-[#ea580c] hover:to-[#c2410c]
@@ -793,7 +942,7 @@ export default function OnayPage() {
                     ) : (
                       <>
                         <Lock size={16} />
-                        Ödemeyi Tamamla — {grandTotal.toLocaleString('tr-TR')} TL
+                        Ödemeyi Tamamla — {effectiveGrandTotal.toLocaleString('tr-TR')} TL
                       </>
                     )}
                   </button>
@@ -809,5 +958,19 @@ export default function OnayPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function OnayPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-gray-400 text-sm">Yükleniyor...</div>
+        </div>
+      }
+    >
+      <OnayPageInner />
+    </Suspense>
   );
 }

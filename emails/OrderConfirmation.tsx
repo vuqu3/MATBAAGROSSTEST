@@ -12,6 +12,7 @@ interface OrderConfirmationProps {
   orderNumber: string;
   customerName: string;
   customerEmail: string;
+  paymentMethod?: 'CARD' | 'BANK_TRANSFER';
   items: OrderItem[];
   totalAmount: number;
   orderDate: string;
@@ -29,11 +30,14 @@ export default function OrderConfirmation({
   orderNumber,
   customerName,
   customerEmail,
+  paymentMethod,
   items,
   totalAmount,
   orderDate,
   shippingAddress,
 }: OrderConfirmationProps) {
+  const isBankTransfer = paymentMethod === 'BANK_TRANSFER';
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
@@ -81,7 +85,9 @@ export default function OrderConfirmation({
               </div>
               <Text style={title}>Siparişiniz Alındı!</Text>
               <Text style={subtitle}>
-                Sayın {customerName}, siparişiniz başarıyla alınmış ve hazırlanmaya başlanmıştır.
+                {isBankTransfer
+                  ? `Sayın ${customerName}, siparişiniz alındı. Siparişinizin işleme alınabilmesi için ödemenizi havale/EFT ile gerçekleştirmeniz gerekmektedir.`
+                  : `Sayın ${customerName}, siparişiniz başarıyla alınmıştır ve ödemeniz onaylanmıştır.`}
               </Text>
             </Column>
           </Row>
@@ -106,6 +112,36 @@ export default function OrderConfirmation({
               </div>
             </Column>
           </Row>
+
+          {isBankTransfer && (
+            <Row style={section}>
+              <Column>
+                <div style={bankTransferBox}>
+                  <Text style={bankTransferTitle}>Ödeme Bekleniyor</Text>
+                  <Text style={bankTransferText}>
+                    Siparişinizin işleme alınabilmesi için lütfen aşağıdaki hesap numarasına ödemenizi gerçekleştirin.
+                  </Text>
+                  <div style={bankTransferTable}>
+                    <div style={bankTransferRow}>
+                      <Text style={bankTransferLabel}>Alıcı:</Text>
+                      <Text style={bankTransferValue}>SB OFSET VE MATBAACILIK SANAYİ TİCARET LİMİTED ŞİRKETİ</Text>
+                    </div>
+                    <div style={bankTransferRow}>
+                      <Text style={bankTransferLabel}>Banka:</Text>
+                      <Text style={bankTransferValue}>YAPI VE KREDİ BANKASI A.Ş.</Text>
+                    </div>
+                    <div style={bankTransferRow}>
+                      <Text style={bankTransferLabel}>IBAN:</Text>
+                      <Text style={bankTransferMono}>TR070006701000000030742376</Text>
+                    </div>
+                  </div>
+                  <Text style={bankTransferHint}>
+                    ÖNEMLİ: Lütfen havale/EFT işlemi sırasında açıklama kısmına sipariş numaranızı ({orderNumber}) yazmayı unutmayın.
+                  </Text>
+                </div>
+              </Column>
+            </Row>
+          )}
 
           {/* Products Table */}
           <Row style={section}>
@@ -267,6 +303,70 @@ const sectionTitle = {
   fontWeight: 'bold',
   color: '#1f2937',
   margin: '0 0 15px 0',
+};
+
+const bankTransferBox = {
+  backgroundColor: '#fff7ed',
+  border: '1px solid #fed7aa',
+  borderRadius: '10px',
+  padding: '16px',
+};
+
+const bankTransferTitle = {
+  fontSize: '16px',
+  fontWeight: 'bold',
+  color: '#9a3412',
+  margin: '0 0 6px 0',
+};
+
+const bankTransferText = {
+  fontSize: '13px',
+  color: '#7c2d12',
+  margin: '0 0 12px 0',
+  lineHeight: '18px',
+};
+
+const bankTransferTable = {
+  backgroundColor: '#ffffff',
+  borderRadius: '8px',
+  border: '1px solid #ffedd5',
+  padding: '10px 12px',
+};
+
+const bankTransferRow = {
+  display: 'flex',
+  gap: '8px',
+  alignItems: 'flex-start',
+};
+
+const bankTransferLabel = {
+  fontSize: '12px',
+  fontWeight: 'bold',
+  color: '#7c2d12',
+  margin: '0',
+  width: '52px',
+};
+
+const bankTransferValue = {
+  fontSize: '12px',
+  color: '#7c2d12',
+  margin: '0',
+  flex: 1,
+};
+
+const bankTransferMono = {
+  fontSize: '12px',
+  color: '#7c2d12',
+  margin: '0',
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  flex: 1,
+};
+
+const bankTransferHint = {
+  fontSize: '12px',
+  color: '#9a3412',
+  margin: '12px 0 0 0',
+  lineHeight: '17px',
 };
 
 const orderInfo = {

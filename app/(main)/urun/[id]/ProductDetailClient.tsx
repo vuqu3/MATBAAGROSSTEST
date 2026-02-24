@@ -7,6 +7,7 @@ import { useCart } from '@/context/CartContext';
 import ProductGallery from '@/app/components/product-detail/ProductGallery';
 import ProductInfo from '@/app/components/product-detail/ProductInfo';
 import ProductActionCard from '@/app/components/product-detail/ProductActionCard';
+import CustomerReviews from '@/app/components/product-detail/CustomerReviews';
 import RelatedProducts from '@/app/components/product-detail/RelatedProducts';
 import type { RelatedProductCard } from '@/app/components/product-detail/RelatedProducts';
 
@@ -200,6 +201,8 @@ export default function ProductDetailClient({
               />
             </div>
           </div>
+
+          <CustomerReviews productId={product.id} />
 
           {/* İlginizi çekebilecek ürünler */}
           <RelatedProducts

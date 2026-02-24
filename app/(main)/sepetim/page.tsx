@@ -20,7 +20,8 @@ export default function SepetimPage() {
     shippingCost,
     grandTotal,
     remainingForFreeShipping,
-    hasFreeShipping
+    hasFreeShipping,
+    freeShippingThreshold
   } = useCart();
 
   // Seller'ları sepet sayfasından engelle
@@ -198,11 +199,11 @@ export default function SepetimPage() {
                       <div className="mt-2 bg-amber-200 rounded-full h-2">
                         <div 
                           className="bg-amber-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${Math.min(100, (totalAmount / 1500) * 100)}%` }}
+                          style={{ width: `${Math.min(100, (totalAmount / Math.max(1, freeShippingThreshold)) * 100)}%` }}
                         />
                       </div>
                       <p className="text-xs text-amber-700 mt-1">
-                        {totalAmount.toLocaleString('tr-TR')} TL / 1.500 TL
+                        {totalAmount.toLocaleString('tr-TR')} TL / {freeShippingThreshold.toLocaleString('tr-TR')} TL
                       </p>
                     </div>
                   </div>

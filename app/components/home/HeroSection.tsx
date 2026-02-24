@@ -66,7 +66,7 @@ export default function HeroSection({ featuredProduct }: { featuredProduct?: Fea
   useEffect(() => {
     fetch('/api/banners')
       .then((res) => res.ok ? res.json() : [])
-      .then((data: Banner[]) => setBanners(data.filter(b => b.isActive)))
+      .then((data: Banner[]) => setBanners(Array.isArray(data) ? data : []))
       .catch(() => setBanners([]));
   }, []);
 

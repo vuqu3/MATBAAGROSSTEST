@@ -82,13 +82,22 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user?.id || session.user.role !== 'USER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const isUser = Boolean(session?.user?.id) && session?.user?.role === 'USER';
 
     const body = await request.json();
-    const { addressId, items } = body as {
-      addressId: string;
+    const {
+      addressId,
+      items,
+      paymentMethod,
+      guestEmail,
+      guestPhone,
+      guestFirstName,
+      guestLastName,
+      guestCity,
+      guestDistrict,
+      guestAddress,
+    } = body as {
+      addressId?: string;
       items: Array<{
         productId: string;
         productName: string;
@@ -99,23 +108,76 @@ export async function POST(request: Request) {
         imageUrl?: string | null;
         uploadedFileUrl?: string | null;
       }>;
+      paymentMethod?: 'CARD' | 'BANK_TRANSFER';
+      guestEmail?: string;
+      guestPhone?: string;
+      guestFirstName?: string;
+      guestLastName?: string;
+      guestCity?: string;
+      guestDistrict?: string;
+      guestAddress?: string;
     };
 
-    if (!addressId || !Array.isArray(items) || items.length === 0) {
+    const resolvedPaymentMethod: 'CARD' | 'BANK_TRANSFER' =
+      paymentMethod === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : 'CARD';
+    const resolvedPaymentStatus: 'PAID' | 'AWAITING_PAYMENT' =
+      resolvedPaymentMethod === 'CARD' ? 'PAID' : 'AWAITING_PAYMENT';
+
+    if (!isUser && resolvedPaymentMethod === 'BANK_TRANSFER') {
       return NextResponse.json(
-        { error: 'Teslimat adresi ve en az bir ürün gerekli' },
+        { error: 'Havale / EFT ile ödeme yapmak için üye girişi yapmanız gerekir' },
         { status: 400 }
       );
     }
 
-    const address = await prisma.address.findFirst({
-      where: { id: addressId, userId: session.user.id },
-    });
-    if (!address) {
-      return NextResponse.json({ error: 'Geçersiz adres' }, { status: 400 });
+    if (!Array.isArray(items) || items.length === 0) {
+      return NextResponse.json(
+        { error: 'En az bir ürün gerekli' },
+        { status: 400 }
+      );
     }
 
-    const totalAmount = items.reduce((sum, i) => sum + (Number(i.totalPrice) || 0), 0);
+    let address: { id: string } | null = null;
+    if (isUser) {
+      if (!addressId) {
+        return NextResponse.json({ error: 'Teslimat adresi gerekli' }, { status: 400 });
+      }
+
+      address = await prisma.address.findFirst({
+        where: { id: addressId, userId: session!.user!.id },
+        select: { id: true },
+      });
+      if (!address) {
+        return NextResponse.json({ error: 'Geçersiz adres' }, { status: 400 });
+      }
+    } else {
+      const email = typeof guestEmail === 'string' ? guestEmail.trim() : '';
+      const phone = typeof guestPhone === 'string' ? guestPhone.trim() : '';
+      const firstName = typeof guestFirstName === 'string' ? guestFirstName.trim() : '';
+      const lastName = typeof guestLastName === 'string' ? guestLastName.trim() : '';
+      const city = typeof guestCity === 'string' ? guestCity.trim() : '';
+      const district = typeof guestDistrict === 'string' ? guestDistrict.trim() : '';
+      const addr = typeof guestAddress === 'string' ? guestAddress.trim() : '';
+
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      const phoneOk = phone.replace(/\D/g, '').length >= 10;
+
+      if (!emailOk) {
+        return NextResponse.json({ error: 'Geçerli bir e-posta adresi giriniz' }, { status: 400 });
+      }
+      if (!phoneOk) {
+        return NextResponse.json({ error: 'Geçerli bir telefon numarası giriniz' }, { status: 400 });
+      }
+      if (!firstName || !lastName || !city || !district || !addr) {
+        return NextResponse.json({ error: 'Teslimat bilgilerini eksiksiz doldurunuz' }, { status: 400 });
+      }
+    }
+
+    const subtotal = items.reduce((sum, i) => {
+      const qty = Math.max(1, Math.floor(Number(i.quantity) || 0));
+      const unit = Math.max(0, Number(i.unitPrice) || 0);
+      return sum + unit * qty;
+    }, 0);
     const barcode = await ensureUniqueBarcode();
 
     // Sepetteki ürünlerin vendorId bilgisini al (multi-vendor: satıcı sipariş listesinde görsün)
@@ -137,6 +199,19 @@ export async function POST(request: Request) {
 
     // Stock validation and order creation in a transaction
     const order = await prisma.$transaction(async (tx) => {
+      const settings = await tx.storeSettings.findFirst({
+        orderBy: { createdAt: 'asc' },
+        select: { shippingFee: true, freeShippingThreshold: true },
+      });
+
+      const shippingFee = Math.max(0, settings?.shippingFee ?? 25);
+      const freeShippingThreshold = Math.max(0, settings?.freeShippingThreshold ?? 1500);
+
+      const discount = isUser && resolvedPaymentMethod === 'BANK_TRANSFER' ? subtotal * 0.05 : 0;
+      const discountedSubtotal = Math.max(0, subtotal - discount);
+      const shippingCost = discountedSubtotal >= freeShippingThreshold ? 0 : shippingFee;
+      const totalAmount = discountedSubtotal + shippingCost;
+
       // 1. Validate stock for all items
       const productIds = [...new Set(items.map((i) => i.productId))];
       const productsWithStock = await tx.product.findMany({
@@ -194,18 +269,26 @@ export async function POST(request: Request) {
       const createdOrder = await tx.order.create({
       data: {
         barcode,
-        userId: session.user.id,
-        addressId,
+        userId: isUser ? session!.user!.id : null,
+        addressId: isUser ? address!.id : null,
+        paymentMethod: resolvedPaymentMethod,
+        paymentStatus: resolvedPaymentStatus,
+        guestEmail: !isUser && typeof guestEmail === 'string' ? guestEmail.trim() : null,
+        guestPhone: !isUser && typeof guestPhone === 'string' ? guestPhone.trim() : null,
+        guestFirstName: !isUser && typeof guestFirstName === 'string' ? guestFirstName.trim() : null,
+        guestLastName: !isUser && typeof guestLastName === 'string' ? guestLastName.trim() : null,
+        guestCity: !isUser && typeof guestCity === 'string' ? guestCity.trim() : null,
+        guestDistrict: !isUser && typeof guestDistrict === 'string' ? guestDistrict.trim() : null,
+        guestAddress: !isUser && typeof guestAddress === 'string' ? guestAddress.trim() : null,
         totalAmount,
         status: 'PENDING',
-        paymentStatus: 'AWAITING_PAYMENT',
         items: {
           create: items.map((i) => ({
             productId: i.productId,
             productName: String(i.productName),
             quantity: Math.max(1, Math.floor(Number(i.quantity) || 0)),
             unitPrice: Number(i.unitPrice) || 0,
-            totalPrice: Number(i.totalPrice) || 0,
+            totalPrice: (Number(i.unitPrice) || 0) * Math.max(1, Math.floor(Number(i.quantity) || 0)),
             options: (i.options ?? undefined) as any,
             imageUrl: i.imageUrl ? String(i.imageUrl) : null,
             uploadedFileUrl: i.uploadedFileUrl ? String(i.uploadedFileUrl) : null,
@@ -290,8 +373,9 @@ export async function POST(request: Request) {
         const emailHtml = await render(
           OrderConfirmation({
             orderNumber: order.barcode || `#${order.id.slice(-8)}`,
-            customerName: order.user.name || 'Değerli Müşterimiz',
-            customerEmail: order.user.email,
+            customerName: order.user?.name || `${order.guestFirstName ?? ''} ${order.guestLastName ?? ''}`.trim() || 'Değerli Müşterimiz',
+            customerEmail: order.user?.email || order.guestEmail || '',
+            paymentMethod: order.paymentMethod,
             items: order.items.map(item => ({
               productName: item.productName,
               quantity: item.quantity,
@@ -301,19 +385,26 @@ export async function POST(request: Request) {
             })),
             totalAmount: order.totalAmount,
             orderDate: order.createdAt.toISOString(),
-            shippingAddress: address ? {
-              title: address.title || undefined,
-              line1: address.line1,
-              line2: address.line2 || undefined,
-              district: address.district || undefined,
-              city: address.city,
-              postalCode: address.postalCode || undefined,
-            } : undefined,
+            shippingAddress: order.address ? {
+              title: order.address.title || undefined,
+              line1: order.address.line1,
+              line2: order.address.line2 || undefined,
+              district: order.address.district || undefined,
+              city: order.address.city,
+              postalCode: order.address.postalCode || undefined,
+            } : (!isUser ? {
+              title: `${order.guestFirstName ?? ''} ${order.guestLastName ?? ''}`.trim() || undefined,
+              line1: order.guestAddress || '',
+              line2: undefined,
+              district: order.guestDistrict || undefined,
+              city: order.guestCity || '',
+              postalCode: undefined,
+            } : undefined),
           })
         );
 
         const adminEmail = process.env.ADMIN_EMAIL || 'volkanongunn@gmail.com';
-        const customerEmail = order.user.email || adminEmail;
+        const customerEmail = order.user?.email || order.guestEmail || adminEmail;
 
         console.log('📧 RESEND GÖNDERİLİYOR:', { to: customerEmail, bcc: adminEmail, orderNo: order.barcode });
 

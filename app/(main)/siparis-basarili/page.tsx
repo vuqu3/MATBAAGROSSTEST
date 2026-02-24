@@ -1,19 +1,67 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckCircle, ShoppingBag, Home, Package } from 'lucide-react';
+import { CheckCircle, ShoppingBag, Home, Package, Copy, Check } from 'lucide-react';
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+
+type PaymentMethod = 'CARD' | 'BANK_TRANSFER';
+
+type TrackOrderResponse = {
+  barcode: string | null;
+  status: string;
+  paymentStatus?: string;
+  paymentMethod?: PaymentMethod;
+};
 
 function OrderSuccessContent() {
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get('orderNo') || '';
   const [visible, setVisible] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [copiedKey, setCopiedKey] = useState<'recipient' | 'iban' | 'orderNo' | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100);
     return () => clearTimeout(t);
   }, []);
+
+  const copyText = async (key: 'recipient' | 'iban' | 'orderNo', text: string) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = text;
+        el.setAttribute('readonly', 'true');
+        el.style.position = 'absolute';
+        el.style.left = '-9999px';
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    const run = async () => {
+      if (!orderNumber) return;
+      try {
+        const res = await fetch(`/api/orders/track?code=${encodeURIComponent(orderNumber)}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as TrackOrderResponse;
+        if (data?.paymentMethod) setPaymentMethod(data.paymentMethod);
+      } catch {
+        // ignore
+      }
+    };
+    run();
+  }, [orderNumber]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
@@ -29,12 +77,73 @@ function OrderSuccessContent() {
           </div>
         </div>
 
+        {paymentMethod === 'BANK_TRANSFER' && orderNumber ? (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-5 mb-6 text-left">
+            <div className="text-sm font-extrabold text-gray-900 mb-3">Havale / EFT Bilgileri</div>
+            <div className="space-y-1.5 text-sm text-gray-800">
+              <div>
+                <span className="font-semibold">Alıcı:</span>{' '}
+                <span className="inline-flex items-center gap-2">
+                  <span>SB OFSET VE MATBAACILIK SANAYİ TİCARET LİMİTED ŞİRKETİ</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copyText(
+                        'recipient',
+                        'SB OFSET VE MATBAACILIK SANAYİ TİCARET LİMİTED ŞİRKETİ'
+                      )
+                    }
+                    className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-orange-200 bg-white text-orange-700 hover:bg-orange-100 transition-colors"
+                    aria-label="Alıcı adını kopyala"
+                  >
+                    {copiedKey === 'recipient' ? <Check size={16} /> : <Copy size={16} />}
+                  </button>
+                </span>
+              </div>
+              <div>
+                <span className="font-semibold">Banka:</span> YAPI VE KREDİ BANKASI A.Ş.
+              </div>
+              <div>
+                <span className="font-semibold">IBAN:</span>{' '}
+                <span className="inline-flex items-center gap-2">
+                  <span className="font-mono">TR070006701000000030742376</span>
+                  <button
+                    type="button"
+                    onClick={() => copyText('iban', 'TR070006701000000030742376')}
+                    className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-orange-200 bg-white text-orange-700 hover:bg-orange-100 transition-colors"
+                    aria-label="IBAN kopyala"
+                  >
+                    {copiedKey === 'iban' ? <Check size={16} /> : <Copy size={16} />}
+                  </button>
+                </span>
+              </div>
+            </div>
+            <div className="mt-4 text-sm font-bold text-orange-900">
+              Lütfen ödeme yaparken bankanızın açıklama kısmına{' '}
+              <span className="inline-flex items-center gap-2">
+                <span className="underline underline-offset-2">{orderNumber}</span>
+                <button
+                  type="button"
+                  onClick={() => copyText('orderNo', orderNumber)}
+                  className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-orange-200 bg-white text-orange-700 hover:bg-orange-100 transition-colors"
+                  aria-label="Sipariş numarasını kopyala"
+                >
+                  {copiedKey === 'orderNo' ? <Check size={16} /> : <Copy size={16} />}
+                </button>
+              </span>{' '}
+              yazmayı unutmayın.
+            </div>
+          </div>
+        ) : null}
+
         {/* Title */}
         <h1 className="text-2xl font-extrabold text-gray-900 mb-2">
           Siparişiniz Alındı!
         </h1>
         <p className="text-gray-500 text-sm mb-6">
-          Ödemeniz başarıyla gerçekleşti. Siparişiniz en kısa sürede hazırlanacaktır.
+          {paymentMethod === 'BANK_TRANSFER'
+            ? 'Siparişiniz alındı. Ödeme havale/EFT ile tamamlandığında siparişiniz işleme alınacaktır.'
+            : 'Ödemeniz başarıyla gerçekleşti. Siparişiniz en kısa sürede hazırlanacaktır.'}
         </p>
 
         {/* Order number card */}
@@ -45,8 +154,16 @@ function OrderSuccessContent() {
           </div>
           {orderNumber ? (
             <>
-              <div className="text-2xl font-black text-[#FF6000] tracking-widest">
-                #{orderNumber}
+              <div className="flex items-center justify-center gap-2">
+                <div className="text-2xl font-black text-[#FF6000] tracking-widest">#{orderNumber}</div>
+                <button
+                  type="button"
+                  onClick={() => copyText('orderNo', orderNumber)}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+                  aria-label="Sipariş numarasını kopyala"
+                >
+                  {copiedKey === 'orderNo' ? <Check size={18} /> : <Copy size={18} />}
+                </button>
               </div>
               <p className="text-xs text-gray-400 mt-2">
                 Bu numarayı not alın. Sipariş takibinde kullanabilirsiniz.

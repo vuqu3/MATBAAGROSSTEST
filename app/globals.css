@@ -58,3 +58,33 @@ body {
 .animate-premium-shimmer {
   animation: premium-shimmer 2.5s ease-in-out infinite;
 }
+
+/* Input metin rengi düzeltmeleri: Adet, Arama ve diğer text/number/search input'ları */
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="email"],
+input[type="tel"],
+input[type="url"],
+textarea {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+/* Focus/active durumlarında da metin rengi siyah kalsın */
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="email"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+textarea:focus {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+/* Placeholder rengi (isteğe bağlı, daha hafif gri) */
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important;
+}

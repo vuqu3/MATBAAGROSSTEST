@@ -19,15 +19,22 @@ type OrderPrint = {
   status: string;
   createdAt: string;
   orderItems: OrderItemType[];
-  address: {
+  address?: {
     city: string;
     district: string | null;
     line1: string;
     line2: string | null;
     postalCode: string | null;
     title: string | null;
-  };
-  user: { name: string | null; email: string | null; phoneNumber: string | null };
+  } | null;
+  user?: { name: string | null; email: string | null; phoneNumber: string | null } | null;
+  guestFirstName?: string | null;
+  guestLastName?: string | null;
+  guestEmail?: string | null;
+  guestPhone?: string | null;
+  guestCity?: string | null;
+  guestDistrict?: string | null;
+  guestAddress?: string | null;
 };
 
 export default function OrderPrintPage() {
@@ -93,6 +100,22 @@ function OrderPrintPageInner() {
 
   const total = order.orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
 
+  const buyerName =
+    order.user?.name ||
+    order.user?.email ||
+    order.address?.title ||
+    `${order.guestFirstName ?? ''} ${order.guestLastName ?? ''}`.trim() ||
+    order.guestEmail ||
+    'Misafir Müşteri';
+
+  const buyerPhone = order.user?.phoneNumber || order.guestPhone || null;
+
+  const addressLine1 = order.address?.line1 || order.guestAddress || '';
+  const addressLine2 = order.address?.line2 || '';
+  const district = order.address?.district || order.guestDistrict || '';
+  const city = order.address?.city || order.guestCity || '';
+  const postalCode = order.address?.postalCode || '';
+
   return (
     <>
       {/* Tam sayfa beyaz overlay: panel (sidebar/header) görünmez, sadece etiket */}
@@ -130,19 +153,19 @@ function OrderPrintPageInner() {
 
           <div className="border border-gray-400 rounded p-3 text-sm">
             <p className="font-semibold text-gray-900 mb-1.5">
-              Alıcı: {order.user?.name || order.user?.email || '—'}
+              Alıcı: {buyerName}
             </p>
             <p className="text-gray-800">
-              {order.address?.line1}
-              {order.address?.line2 ? `, ${order.address.line2}` : ''}
+              {addressLine1}
+              {addressLine2 ? `, ${addressLine2}` : ''}
             </p>
             <p className="text-gray-800">
-              {order.address?.district ? `${order.address.district}, ` : ''}
-              {order.address?.city}
-              {order.address?.postalCode ? ` ${order.address.postalCode}` : ''}
+              {district ? `${district}, ` : ''}
+              {city}
+              {postalCode ? ` ${postalCode}` : ''}
             </p>
-            {order.user?.phoneNumber && (
-              <p className="text-gray-800 mt-1 font-medium">Tel: {order.user.phoneNumber}</p>
+            {buyerPhone && (
+              <p className="text-gray-800 mt-1 font-medium">Tel: {buyerPhone}</p>
             )}
           </div>
 

@@ -205,13 +205,30 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
     pageDescription = 'Gıda, restoran ve içecek ambalajlarında toptan fiyatına perakende satış fırsatları.';
   } else if (categorySlug) {
     // Normal kategori filtresi
+    const categoryWithChildren = await prisma.category.findUnique({
+      where: { slug: categorySlug },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        children: {
+          select: { id: true },
+          where: { isActive: true },
+        },
+      },
+    });
+
+    const categoryIds = categoryWithChildren
+      ? [categoryWithChildren.id, ...(categoryWithChildren.children || []).map((c) => c.id)]
+      : [];
+
     products = await prisma.product.findMany({
       where: {
         isActive: true,
         isPublished: true,
-        category: {
-          slug: categorySlug,
-        },
+        ...(categoryIds.length > 0
+          ? { categoryId: { in: categoryIds } }
+          : { category: { slug: categorySlug } }),
       },
       include: {
         category: {
@@ -239,8 +256,9 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
       ],
     });
 
-    pageTitle = `${products[0]?.category?.name || categorySlug} Ürünleri`;
-    pageDescription = `${products[0]?.category?.name || categorySlug} kategorisindeki tüm ürünlerimiz.`;
+    const displayName = categoryWithChildren?.name || products[0]?.category?.name || categorySlug;
+    pageTitle = `${displayName} Ürünleri`;
+    pageDescription = `${displayName} kategorisindeki tüm ürünlerimiz.`;
   } else {
     // Tüm ürünler
     products = await prisma.product.findMany({

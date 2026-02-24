@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { FREE_SHIPPING_THRESHOLD, calculateShippingCost, calculateRemainingForFreeShipping } from '@/lib/shipping';
 
 const CART_STORAGE_KEY = 'matbaagross_cart';
 
@@ -39,6 +38,8 @@ type CartContextValue = {
   grandTotal: number;
   remainingForFreeShipping: number;
   hasFreeShipping: boolean;
+  shippingFee: number;
+  freeShippingThreshold: number;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -65,10 +66,31 @@ function saveToStorage(items: CartItem[]) {
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [shippingFee, setShippingFee] = useState<number>(25);
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number>(1500);
 
   useEffect(() => {
     setItems(loadFromStorage());
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const res = await fetch('/api/store-settings');
+        if (!res.ok) return;
+        const data = (await res.json()) as { shippingFee?: number; freeShippingThreshold?: number };
+        if (typeof data.shippingFee === 'number' && Number.isFinite(data.shippingFee)) {
+          setShippingFee(Math.max(0, data.shippingFee));
+        }
+        if (typeof data.freeShippingThreshold === 'number' && Number.isFinite(data.freeShippingThreshold)) {
+          setFreeShippingThreshold(Math.max(0, data.freeShippingThreshold));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    run();
   }, []);
 
   useEffect(() => {
@@ -101,14 +123,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const totalAmount = useMemo(() => items.reduce((sum, i) => sum + i.totalPrice, 0), [items]);
   const totalDesi = useMemo(() => items.reduce((sum, i) => sum + (i.desi || 0) * i.quantity, 0), [items]);
   
-  const hasFreeShipping = useMemo(() => totalAmount >= FREE_SHIPPING_THRESHOLD, [totalAmount]);
+  const hasFreeShipping = useMemo(() => totalAmount >= freeShippingThreshold, [totalAmount, freeShippingThreshold]);
   const shippingCost = useMemo(() => {
     if (hasFreeShipping) return 0;
-    return calculateShippingCost(totalDesi);
-  }, [hasFreeShipping, totalDesi]);
+    return shippingFee;
+  }, [hasFreeShipping, shippingFee]);
   
   const grandTotal = useMemo(() => totalAmount + shippingCost, [totalAmount, shippingCost]);
-  const remainingForFreeShipping = useMemo(() => calculateRemainingForFreeShipping(totalAmount), [totalAmount]);
+  const remainingForFreeShipping = useMemo(
+    () => Math.max(0, freeShippingThreshold - totalAmount),
+    [freeShippingThreshold, totalAmount]
+  );
 
   const value = useMemo<CartContextValue>(
     () => ({
@@ -124,8 +149,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       grandTotal,
       remainingForFreeShipping,
       hasFreeShipping,
+      shippingFee,
+      freeShippingThreshold,
     }),
-    [items, addItem, updateQuantity, removeItem, clearCart, totalCount, totalAmount, totalDesi, shippingCost, grandTotal, remainingForFreeShipping, hasFreeShipping]
+    [items, addItem, updateQuantity, removeItem, clearCart, totalCount, totalAmount, totalDesi, shippingCost, grandTotal, remainingForFreeShipping, hasFreeShipping, shippingFee, freeShippingThreshold]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

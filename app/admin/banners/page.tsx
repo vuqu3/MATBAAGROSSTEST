@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Plus, Edit2, Trash2, ExternalLink, Power, PowerOff } from 'lucide-react';
+import { Plus, Edit2, Trash2, ExternalLink, Power, PowerOff, Upload, X } from 'lucide-react';
 
 interface Banner {
   id: string;
@@ -40,6 +40,9 @@ export default function AdminBannersPage() {
     isActive: true,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     fetchBanners();
@@ -64,20 +67,33 @@ export default function AdminBannersPage() {
     setSubmitting(true);
 
     try {
+      // Upload image if a new file is selected
+      const uploadedUrl = await uploadImage();
+      if (!uploadedUrl && !formData.imageUrl) {
+        alert('Lütfen bir görsel yükleyin veya görsel URL girin.');
+        setSubmitting(false);
+        return;
+      }
+
       const url = editingBanner ? `/api/banners/${editingBanner.id}` : '/api/banners';
       const method = editingBanner ? 'PATCH' : 'POST';
+
+      const payload = {
+        ...formData,
+        imageUrl: uploadedUrl || formData.imageUrl,
+      };
 
       console.log('FRONTEND_SUBMITTING:', {
         url,
         method,
-        formData,
+        payload,
         editingBanner: editingBanner?.id
       });
 
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const responseData = await res.json();
@@ -95,6 +111,8 @@ export default function AdminBannersPage() {
           order: 0,
           isActive: true,
         });
+        setImageFile(null);
+        setImageDimensions(null);
         alert(editingBanner ? 'Banner başarıyla güncellendi!' : 'Banner başarıyla eklendi!');
       } else {
         console.error('FRONTEND_ERROR:', responseData);
@@ -102,7 +120,7 @@ export default function AdminBannersPage() {
       }
     } catch (error) {
       console.error('FRONTEND_CATCH_ERROR:', error);
-      alert('Bağlantı hatası. Lütfen tekrar deneyin.');
+      alert(error instanceof Error ? error.message : 'Bağlantı hatası. Lütfen tekrar deneyin.');
     } finally {
       setSubmitting(false);
     }
@@ -118,6 +136,8 @@ export default function AdminBannersPage() {
       order: banner.order,
       isActive: banner.isActive,
     });
+    setImageFile(null);
+    setImageDimensions(null);
     setShowModal(true);
   };
 
@@ -161,6 +181,66 @@ export default function AdminBannersPage() {
     } catch (error) {
       console.error('Banner durumu güncellenirken hata:', error);
     }
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Lütfen bir resim dosyası seçin.');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Resim dosyası 5MB\'dan küçük olmalıdır.');
+      return;
+    }
+
+    setImageFile(file);
+    setUploading(true);
+
+    // Get image dimensions
+    const img = document.createElement('img') as HTMLImageElement;
+    img.onload = () => {
+      setImageDimensions({ width: img.width, height: img.height });
+      setUploading(false);
+    };
+    img.onerror = () => {
+      alert('Resim yüklenirken bir hata oluştu.');
+      setImageFile(null);
+      setImageDimensions(null);
+      setUploading(false);
+    };
+    img.src = URL.createObjectURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setImageFile(null);
+    setImageDimensions(null);
+    setFormData({ ...formData, imageUrl: '' });
+  };
+
+  const uploadImage = async (): Promise<string | null> => {
+    if (!imageFile) return formData.imageUrl || null;
+
+    const fd = new FormData();
+    fd.append('file', imageFile);
+
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Görsel yüklenirken bir hata oluştu.');
+    }
+
+    if (!data.url) {
+      throw new Error('Görsel yüklenirken bir hata oluştu.');
+    }
+
+    return data.url;
   };
 
   if (loading) {
@@ -323,16 +403,68 @@ export default function AdminBannersPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Görsel URL
+                    Görsel Yükle
                   </label>
-                  <input
-                    type="url"
-                    value={formData.imageUrl}
-                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="https://example.com/image.jpg"
-                    required
-                  />
+                  <div className="space-y-2">
+                    {!imageFile ? (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="hidden"
+                          id="bannerImage"
+                        />
+                        <label
+                          htmlFor="bannerImage"
+                          className="flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50"
+                        >
+                          <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                          <span className="text-sm text-gray-600">Resim seçmek için tıklayın</span>
+                          <span className="text-xs text-gray-500 mt-1">JPEG, PNG, GIF, WebP (max 5MB)</span>
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="border rounded-lg p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">{imageFile.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {(imageFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                            {imageDimensions && (
+                              <p className="text-xs text-blue-600 font-medium">
+                                Boyut: {imageDimensions.width} × {imageDimensions.height} px
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemoveImage}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                        {imageDimensions && (
+                          <div className="relative w-full h-32 bg-gray-100 rounded overflow-hidden">
+                            <Image
+                              src={URL.createObjectURL(imageFile)}
+                              alt="Preview"
+                              fill
+                              className="object-contain"
+                              sizes="320px"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {!imageFile && formData.imageUrl && (
+                      <div className="text-xs text-gray-500">
+                        Mevcut görsel: {formData.imageUrl}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -418,6 +550,8 @@ export default function AdminBannersPage() {
                         order: 0,
                         isActive: true,
                       });
+                      setImageFile(null);
+                      setImageDimensions(null);
                     }}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
