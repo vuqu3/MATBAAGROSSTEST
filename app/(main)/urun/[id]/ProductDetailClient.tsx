@@ -2,11 +2,12 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Home } from 'lucide-react';
+import { CreditCard, Home, X } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import ProductGallery from '@/app/components/product-detail/ProductGallery';
 import ProductInfo from '@/app/components/product-detail/ProductInfo';
 import ProductActionCard from '@/app/components/product-detail/ProductActionCard';
+import PaytrTaksitTablosu from '@/app/components/PaytrTaksitTablosu';
 import CustomerReviews from '@/app/components/product-detail/CustomerReviews';
 import RelatedProducts from '@/app/components/product-detail/RelatedProducts';
 import type { RelatedProductCard } from '@/app/components/product-detail/RelatedProducts';
@@ -25,6 +26,8 @@ type Product = {
   basePrice: number;
   salePrice: number | null;
   productType: string;
+  stock?: number | null;
+  stockQuantity?: number | null;
   minOrderQuantity: number | null;
   productionDays?: number | null;
   category: { id?: string; name: string; slug: string };
@@ -48,12 +51,13 @@ export default function ProductDetailClient({
   relatedProducts?: RelatedProductCard[];
   recommendedProducts?: RelatedProductCard[];
 }) {
-  const { addItem } = useCart();
+  const { addItem, openCart } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [selections, setSelections] = useState<Record<string, ProductAttributeOption>>({});
   const [uploading, setUploading] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [isTaksitModalOpen, setIsTaksitModalOpen] = useState(false);
 
   const attributes = (product.attributes && Array.isArray(product.attributes) ? product.attributes : []) as ProductAttribute[];
   const vendorName = product.vendorName ?? 'MatbaaGross';
@@ -70,6 +74,27 @@ export default function ProductDetailClient({
   const unitPrice = selectedVariant ? selectedVariant.price : displayBase + optionsTotal;
   const totalPrice = unitPrice * quantity;
 
+  const availableStock = useMemo(() => {
+    if (selectedVariant) {
+      return Number.isFinite(Number(selectedVariant.stock)) ? Number(selectedVariant.stock) : 0;
+    }
+
+    const raw = product.stock;
+    if (raw === null || raw === undefined) {
+      // Stok alanı yoksa/saklanmıyorsa: sınırsız kabul et.
+      return null;
+    }
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }, [product.stock, selectedVariant]);
+
+  const stockIssue = useMemo(() => {
+    if (availableStock === null) return null;
+    if (availableStock <= 0) return 'out_of_stock' as const;
+    if (quantity > availableStock) return 'insufficient_stock' as const;
+    return null;
+  }, [availableStock, quantity]);
+
   const imageList = useMemo(() => {
     const main = product.imageUrl;
     const arr = Array.isArray(product.images) ? (product.images as string[]) : [];
@@ -80,6 +105,7 @@ export default function ProductDetailClient({
   const mainImageUrl = imageList[0] || '/placeholder-product.svg';
 
   const handleAddToCart = () => {
+    if (stockIssue) return;
     const baseOptions = Object.fromEntries(
       Object.entries(selections).filter(([, opt]) => opt?.label).map(([k, v]) => [k, v!.label])
     );
@@ -102,6 +128,7 @@ export default function ProductDetailClient({
       totalPrice: unitPrice * quantity,
       options: optionsWithVariant,
     });
+    openCart();
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   };
@@ -183,11 +210,21 @@ export default function ProductDetailClient({
                 selectedVariant={selectedVariant}
                 onVariantChange={setSelectedVariant}
               />
+
+              <button
+                type="button"
+                onClick={() => setIsTaksitModalOpen(true)}
+                className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 transition-colors"
+              >
+                <CreditCard className="h-4 w-4 text-gray-700" />
+                Taksit Seçenekleri
+              </button>
             </div>
 
             {/* Sağ: Sticky aksiyon kartı */}
             <div className="lg:col-span-4">
               <ProductActionCard
+                productId={product.id}
                 unitPrice={unitPrice}
                 totalPrice={totalPrice}
                 dbUnitPrice={product.unitPrice ?? null}
@@ -197,7 +234,14 @@ export default function ProductDetailClient({
                 addedToCart={added}
                 loading={uploading}
                 minOrderQuantity={product.minOrderQuantity}
-                canAddToCart={true}
+                canAddToCart={!stockIssue}
+                disabledText={
+                  stockIssue === 'out_of_stock'
+                    ? 'Stokta Yok'
+                    : stockIssue === 'insufficient_stock'
+                      ? 'Yetersiz Stok'
+                      : undefined
+                }
               />
             </div>
           </div>
@@ -209,6 +253,25 @@ export default function ProductDetailClient({
             title="Bunlar da İlginizi Çekebilir"
             products={relatedList}
           />
+
+          {isTaksitModalOpen ? (
+            <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4">
+              <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto bg-white rounded-2xl p-6 relative">
+                <button
+                  type="button"
+                  onClick={() => setIsTaksitModalOpen(false)}
+                  className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                  aria-label="Kapat"
+                >
+                  <X className="h-5 w-5 text-gray-600" />
+                </button>
+
+                <div className="flex items-center justify-center">
+                  <PaytrTaksitTablosu price={totalPrice} />
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

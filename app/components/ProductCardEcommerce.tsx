@@ -42,12 +42,11 @@ export default function ProductCardEcommerce({
     : undefined);
   const isReady = productType === 'READY';
   const router = useRouter();
-  const { addItem } = useCart();
+  const { addItem, openCart } = useCart();
   const [added, setAdded] = useState(false);
 
-  // Stock status logic - use both stock and stockQuantity
-  const isInStock = (stock !== null && stock !== undefined && stock > 0) || 
-                   (stockQuantity !== null && stockQuantity !== undefined && stockQuantity > 0);
+  const isOutOfStock = stock === 0;
+  const isInStock = !isOutOfStock;
   const stockStatus = isInStock ? 'in_stock' : 'out_of_stock';
 
   const handleQuickAdd = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -66,6 +65,8 @@ export default function ProductCardEcommerce({
       totalPrice: price,
       options: {},
     });
+
+    openCart();
 
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2000);
@@ -162,20 +163,15 @@ export default function ProductCardEcommerce({
             onClick={handleAddButtonClick}
             disabled={!isInStock}
             className={`w-full font-medium py-1.5 px-3 rounded-md text-sm transition-colors flex items-center justify-center gap-1.5 ${
-              added
-                ? 'bg-green-600 hover:bg-green-700 text-white'
-                : isInStock
-                  ? 'bg-[#FF6000] hover:bg-[#e55a00] text-white'
-                  : 'bg-gray-400 text-gray-200 cursor-not-allowed hover:bg-gray-400'
+              isOutOfStock
+                ? 'bg-gray-400 text-gray-200 cursor-not-allowed hover:bg-gray-400'
+                : added
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-[#FF6000] hover:bg-[#e55a00] text-white'
             }`}
           >
             <ShoppingCart size={14} />
-            {added 
-              ? 'Eklendi!' 
-              : isInStock 
-                ? 'Sepete Ekle' 
-                : 'Tükendi'
-            }
+            {isOutOfStock ? 'Tükendi' : added ? 'Eklendi!' : 'Sepete Ekle'}
           </button>
         </div>
       </div>

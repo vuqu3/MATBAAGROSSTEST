@@ -54,6 +54,7 @@ model User {
   reviews         Review[]
   supportTickets  SupportTicket[]
   vendor          Vendor?   // Satıcı hesabı (bir kullanıcı en fazla bir satıcıya sahip olabilir)
+  premiumQuoteRequests PremiumQuoteRequest[]
 
   @@map("users")
 }
@@ -64,10 +65,12 @@ model Vendor {
   slug            String    @unique
   commissionRate  Float     @default(2.0) // Komisyon oranı (%)
   balance         Float     @default(0)   // Kazanılan bakiye
+  pendingBalance  Float     @default(0)
   isBlocked       Boolean   @default(false) // Satıcı engellendi mi
   ownerId         String    @unique
   owner           User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   bids            Bid[]     // Satıcının verdiği teklifler
+  premiumQuoteOffers PremiumQuoteOffer[]
   machineListings MachineListing[] // Satıcının makine ilanları
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -83,6 +86,7 @@ model Address {
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   type       AddressType // Fatura veya Teslimat
   title      String?     // Adres başlığı (örn. "Merkez", "Şube")
+  phone      String?
   city       String
   district   String?     // İlçe
   line1      String     // Adres satırı 1
@@ -110,6 +114,24 @@ enum PaymentStatus {
 enum PaymentMethod {
   CARD
   BANK_TRANSFER
+}
+
+enum HomepageSectionType {
+  PRODUCT_CAROUSEL
+  BANNER_GRID
+}
+
+model HomepageSection {
+  id       String              @id @default(cuid())
+  title    String
+  type     HomepageSectionType
+  order    Int                 @default(0)
+  isActive Boolean             @default(true)
+  metadata Json?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@map("homepage_sections")
 }
 
 model Order {
@@ -250,6 +272,7 @@ model Product {
   featuredWidgets   FeaturedWidget[]
   variants          ProductVariant[]
   reviews           Review[]
+  premiumQuoteRequests PremiumQuoteRequest[]
 
   @@map("products")
 }
@@ -408,6 +431,65 @@ enum BidStatus {
   ACCEPTED          // Kabul edildi
   REJECTED          // Reddedildi
   EXPIRED           // Süresi doldu
+}
+
+enum PremiumQuoteRequestStatus {
+  PENDING
+  PROCESSING
+  QUOTED
+  REJECTED
+  COMPLETED
+}
+
+enum PremiumQuoteOfferStatus {
+  PENDING
+  PAID
+  ACCEPTED
+  REJECTED
+}
+
+model PremiumQuoteRequest {
+  id               String                   @id @default(cuid())
+  requestNo         String                   @unique
+  userId           String?
+  user             User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  productId         String?
+  product          Product?                 @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  productName      String
+  quantity         Int
+  description      String
+  technicalDetails String?
+  fileUrl          String?
+  status           PremiumQuoteRequestStatus @default(PENDING)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  offers           PremiumQuoteOffer[]
+
+  @@index([userId])
+  @@index([productId])
+  @@map("premium_quote_requests")
+}
+
+model PremiumQuoteOffer {
+  id            String                 @id @default(cuid())
+  requestId     String
+  request       PremiumQuoteRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  vendorId      String
+  vendor        Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  price         Float
+  unitPrice     Float?
+  totalPrice    Float?
+  deliveryTime  String
+  note          String
+  status        PremiumQuoteOfferStatus @default(PENDING)
+  createdAt     DateTime               @default(now())
+
+  @@unique([requestId, vendorId])
+  @@index([vendorId])
+  @@index([requestId])
+  @@map("premium_quote_offers")
 }
 
 // Makine İlanları

@@ -31,6 +31,9 @@ type CartContextValue = {
   updateQuantity: (lineId: string, quantity: number) => void;
   removeItem: (lineId: string) => void;
   clearCart: () => void;
+  isCartOpen: boolean;
+  openCart: () => void;
+  closeCart: () => void;
   totalCount: number;
   totalAmount: number;
   totalDesi: number;
@@ -68,6 +71,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [shippingFee, setShippingFee] = useState<number>(25);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState<number>(1500);
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   useEffect(() => {
     setItems(loadFromStorage());
@@ -77,7 +81,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const run = async () => {
       try {
-        const res = await fetch('/api/store-settings');
+        const res = await fetch('/api/store-settings', { cache: 'no-store' });
         if (!res.ok) return;
         const data = (await res.json()) as { shippingFee?: number; freeShippingThreshold?: number };
         if (typeof data.shippingFee === 'number' && Number.isFinite(data.shippingFee)) {
@@ -119,6 +123,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = useCallback(() => setItems([]), []);
 
+  const openCart = useCallback(() => setIsCartOpen(true), []);
+  const closeCart = useCallback(() => setIsCartOpen(false), []);
+
   const totalCount = useMemo(() => items.reduce((sum, i) => sum + i.quantity, 0), [items]);
   const totalAmount = useMemo(() => items.reduce((sum, i) => sum + i.totalPrice, 0), [items]);
   const totalDesi = useMemo(() => items.reduce((sum, i) => sum + (i.desi || 0) * i.quantity, 0), [items]);
@@ -142,6 +149,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       updateQuantity,
       removeItem,
       clearCart,
+      isCartOpen,
+      openCart,
+      closeCart,
       totalCount,
       totalAmount,
       totalDesi,
@@ -152,7 +162,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       shippingFee,
       freeShippingThreshold,
     }),
-    [items, addItem, updateQuantity, removeItem, clearCart, totalCount, totalAmount, totalDesi, shippingCost, grandTotal, remainingForFreeShipping, hasFreeShipping, shippingFee, freeShippingThreshold]
+    [items, addItem, updateQuantity, removeItem, clearCart, isCartOpen, openCart, closeCart, totalCount, totalAmount, totalDesi, shippingCost, grandTotal, remainingForFreeShipping, hasFreeShipping, shippingFee, freeShippingThreshold]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

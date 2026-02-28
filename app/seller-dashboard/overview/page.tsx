@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Package, Clock } from 'lucide-react';
+import { ShoppingCart, Package, Clock, CreditCard, Landmark, CheckCircle } from 'lucide-react';
 
 function formatTRY(n: number) {
   return new Intl.NumberFormat('tr-TR', {
@@ -21,6 +21,9 @@ const statusLabel: Record<string, string> = {
 
 type OverviewData = {
   totalSales: number;
+  cardSales?: number;
+  bankTransferSales?: number;
+  completedOrders?: number;
   pendingOrders: number;
   pendingProducts: number;
   chartData?: { date: string; total: number }[];
@@ -83,10 +86,31 @@ export default function SellerOverviewPage() {
       href: '/seller-dashboard/orders',
     },
     {
+      title: 'Kredi Kartı Satışları',
+      value: formatTRY(data?.cardSales ?? 0),
+      icon: CreditCard,
+      color: 'bg-slate-700',
+      href: '/seller-dashboard/orders',
+    },
+    {
+      title: 'Havale / EFT Satışları',
+      value: formatTRY(data?.bankTransferSales ?? 0),
+      icon: Landmark,
+      color: 'bg-emerald-600',
+      href: '/seller-dashboard/orders',
+    },
+    {
       title: 'Bekleyen Siparişler',
       value: String(data?.pendingOrders ?? 0),
       icon: Package,
       color: 'bg-blue-500',
+      href: '/seller-dashboard/orders',
+    },
+    {
+      title: 'Tamamlanan Siparişler',
+      value: String(data?.completedOrders ?? 0),
+      icon: CheckCircle,
+      color: 'bg-emerald-500',
       href: '/seller-dashboard/orders',
     },
     {
@@ -103,7 +127,7 @@ export default function SellerOverviewPage() {
       <h1 className="text-2xl font-bold text-gray-800">Özet</h1>
 
       {/* 1. İstatistik Kartları */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => {
           const Icon = s.icon;
           const card = (

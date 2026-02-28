@@ -8,6 +8,7 @@ type Address = {
   id: string;
   type: string;
   title: string | null;
+  phone: string | null;
   city: string;
   district: string | null;
   line1: string;
@@ -23,6 +24,7 @@ export default function AdreslerPage() {
   const [form, setForm] = useState({
     type: 'SHIPPING',
     title: '',
+    phone: '',
     city: '',
     district: '',
     line1: '',
@@ -56,7 +58,7 @@ export default function AdreslerPage() {
       const data = await res.json();
       if (res.ok) {
         setAddresses((prev) => [...prev, data]);
-        setForm({ type: 'SHIPPING', title: '', city: '', district: '', line1: '', line2: '', postalCode: '' });
+        setForm({ type: 'SHIPPING', title: '', phone: '', city: '', district: '', line1: '', line2: '', postalCode: '' });
         setShowForm(false);
       }
     } finally {
@@ -109,6 +111,17 @@ export default function AdreslerPage() {
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 placeholder="Örn. Merkez, Şube"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#FF6000]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                placeholder="05XX XXX XX XX"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#FF6000]"
               />
             </div>
@@ -208,6 +221,9 @@ export default function AdreslerPage() {
                     {addr.type === 'SHIPPING' ? 'Teslimat' : 'Fatura'}
                   </span>
                   {addr.title && <span className="font-medium text-gray-900">{addr.title}</span>}
+                  {addr.phone ? (
+                    <p className="text-sm text-gray-700 mt-1">{addr.phone}</p>
+                  ) : null}
                   <p className="text-gray-600 mt-1">
                     {addr.line1}
                     {addr.line2 && `, ${addr.line2}`}

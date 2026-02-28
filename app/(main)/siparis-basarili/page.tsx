@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { CheckCircle, ShoppingBag, Home, Package, Copy, Check } from 'lucide-react';
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useCart } from '@/context/CartContext';
 
 type PaymentMethod = 'CARD' | 'BANK_TRANSFER';
 
@@ -16,10 +17,19 @@ type TrackOrderResponse = {
 
 function OrderSuccessContent() {
   const searchParams = useSearchParams();
-  const orderNumber = searchParams.get('orderNo') || '';
+  const { clearCart } = useCart();
+  const orderNoFromQuery = searchParams.get('orderNo') || '';
+  const orderIdFromQuery = searchParams.get('orderId') || '';
+  const [orderNumber, setOrderNumber] = useState(orderNoFromQuery);
   const [visible, setVisible] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [copiedKey, setCopiedKey] = useState<'recipient' | 'iban' | 'orderNo' | null>(null);
+
+  useEffect(() => {
+    const code = (orderNoFromQuery || orderIdFromQuery).trim();
+    if (!code) return;
+    clearCart();
+  }, [clearCart, orderIdFromQuery, orderNoFromQuery]);
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100);
@@ -50,18 +60,27 @@ function OrderSuccessContent() {
 
   useEffect(() => {
     const run = async () => {
-      if (!orderNumber) return;
+      const code = (orderNoFromQuery || orderIdFromQuery).trim();
+      if (!code) return;
       try {
-        const res = await fetch(`/api/orders/track?code=${encodeURIComponent(orderNumber)}`);
+        const res = await fetch(`/api/orders/track?code=${encodeURIComponent(code)}`);
         if (!res.ok) return;
         const data = (await res.json()) as TrackOrderResponse;
+
+        if (!orderNoFromQuery) {
+          const resolved = typeof data?.barcode === 'string' ? data.barcode.trim() : '';
+          if (resolved) setOrderNumber(resolved);
+        } else {
+          setOrderNumber(orderNoFromQuery);
+        }
+
         if (data?.paymentMethod) setPaymentMethod(data.paymentMethod);
       } catch {
         // ignore
       }
     };
     run();
-  }, [orderNumber]);
+  }, [orderIdFromQuery, orderNoFromQuery]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">

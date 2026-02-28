@@ -2,6 +2,7 @@
 
 import { Truck, RotateCcw, CreditCard, Phone, Mail, MapPin, Facebook, Instagram, Linkedin, Twitter, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
 
 interface FooterProps {
@@ -47,7 +48,16 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
           <div>
-            <h2 className="text-xl font-bold mb-4">MatbaaGross</h2>
+            <Link href="/" className="inline-flex mb-4">
+              <Image
+                src="/logo.svg"
+                alt="Matbaagross Logo"
+                width={180}
+                height={48}
+                className="h-10 w-auto object-contain"
+                priority
+              />
+            </Link>
             <p className="text-gray-300 text-sm mb-4">
               Türkiye'nin Online Matbaa Toptancısı
             </p>
@@ -281,16 +291,7 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
               <span className="text-xs text-gray-400 mr-2">Güvenli Ödeme:</span>
               <div className="flex gap-3">
                 <div className="w-12 h-8 bg-white/10 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">PayTR</span>
-                </div>
-                <div className="w-12 h-8 bg-white/10 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">VISA</span>
-                </div>
-                <div className="w-12 h-8 bg-white/10 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">MC</span>
-                </div>
-                <div className="w-12 h-8 bg-white/10 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">TROY</span>
+                  <Image src="/paytr-logo.svg" alt="PayTR Güvenli Ödeme" width={96} height={32} className="h-6 w-auto" />
                 </div>
               </div>
             </div>

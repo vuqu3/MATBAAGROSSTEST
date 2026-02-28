@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { revalidatePath } from 'next/cache';
 
 export async function GET() {
   try {
@@ -48,6 +49,11 @@ export async function PATCH(request: Request) {
       create: { id: 'default', shippingFee, freeShippingThreshold },
       select: { shippingFee: true, freeShippingThreshold: true },
     });
+
+    revalidatePath('/');
+    revalidatePath('/sepetim');
+    revalidatePath('/sepetim/onay');
+    revalidatePath('/admin/settings/shipping');
 
     return NextResponse.json(updated);
   } catch (error) {

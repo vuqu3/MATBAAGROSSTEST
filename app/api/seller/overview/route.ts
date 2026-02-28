@@ -15,31 +15,59 @@ export async function GET() {
     return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
   }
 
+  const vendorId = String((vendor as any).id);
+  const vendorCommissionRate = Number((vendor as any).commissionRate ?? 0);
+
   // 30 gün öncesinin tarihi
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const [totalSalesRaw, pendingItemsCount, itemsForEarnings, pendingProductsCount, recentOrderItems, vendorWithSlug, salesChart] = await Promise.all([
+  const [
+    totalSalesRaw,
+    cardSalesRaw,
+    bankTransferSalesRaw,
+    pendingItemsCount,
+    completedOrdersCount,
+    itemsForEarnings,
+    pendingProductsCount,
+    recentOrderItems,
+    vendorWithSlug,
+    salesChart,
+  ] = await Promise.all([
     prisma.orderItem.aggregate({
-      where: { vendorId: vendor.id },
+      where: { vendorId },
       _sum: { totalPrice: true },
       _count: true,
     }),
+    prisma.orderItem.aggregate({
+      where: { vendorId, order: { is: { paymentMethod: 'CARD' } } },
+      _sum: { totalPrice: true },
+    }),
+    prisma.orderItem.aggregate({
+      where: { vendorId, order: { is: { paymentMethod: 'BANK_TRANSFER' } } },
+      _sum: { totalPrice: true },
+    }),
     prisma.orderItem.count({
       where: {
-        vendorId: vendor.id,
-        order: { status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] } },
+        vendorId,
+        order: { is: { status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] } } },
+      },
+    }),
+    prisma.order.count({
+      where: {
+        status: OrderStatus.COMPLETED,
+        items: { some: { vendorId } },
       },
     }),
     prisma.orderItem.findMany({
-      where: { vendorId: vendor.id },
+      where: { vendorId },
       select: { totalPrice: true },
     }),
     prisma.product.count({
-      where: { vendorId: vendor.id, status: 'PENDING' },
+      where: { vendorId, status: 'PENDING' },
     }),
     prisma.orderItem.findMany({
-      where: { vendorId: vendor.id },
+      where: { vendorId },
       take: 5,
       orderBy: { createdAt: 'desc' },
       include: {
@@ -47,23 +75,25 @@ export async function GET() {
       },
     }),
     prisma.vendor.findUnique({
-      where: { id: vendor.id },
+      where: { id: vendorId },
       select: { name: true, slug: true },
     }),
     // 30 günlük satış verileri
     prisma.orderItem.groupBy({
       by: ['createdAt'],
       where: {
-        vendorId: vendor.id,
-        order: { status: { in: [OrderStatus.COMPLETED] } },
+        vendorId,
+        order: { is: { status: { in: [OrderStatus.COMPLETED] } } },
         createdAt: { gte: thirtyDaysAgo },
       },
       _sum: { totalPrice: true },
     }),
   ]);
 
-  const totalSales = totalSalesRaw._sum.totalPrice ?? 0;
-  const commissionRate = vendor.commissionRate / 100;
+  const totalSales = totalSalesRaw._sum?.totalPrice ?? 0;
+  const cardSales = cardSalesRaw._sum?.totalPrice ?? 0;
+  const bankTransferSales = bankTransferSalesRaw._sum?.totalPrice ?? 0;
+  const commissionRate = vendorCommissionRate / 100;
   const earnings = itemsForEarnings.reduce((sum, i) => sum + (1 - commissionRate) * i.totalPrice, 0);
 
   // 30 günlük satış verisini gün bazında grupla
@@ -91,15 +121,18 @@ export async function GET() {
 
   return NextResponse.json({
     totalSales,
+    cardSales,
+    bankTransferSales,
+    completedOrders: completedOrdersCount,
     pendingOrders: pendingItemsCount,
     pendingProducts: pendingProductsCount,
     earnings,
-    commissionRate: vendor.commissionRate,
+    commissionRate: vendorCommissionRate,
     chartData,
-    recentOrders: recentOrderItems.map((item) => ({
+    recentOrders: (recentOrderItems as any[]).map((item) => ({
       id: item.id,
-      barcode: item.order.barcode,
-      status: item.order.status,
+      barcode: item.order?.barcode ?? null,
+      status: item.order?.status ?? 'PENDING',
       totalPrice: item.totalPrice,
       createdAt: item.createdAt,
     })),

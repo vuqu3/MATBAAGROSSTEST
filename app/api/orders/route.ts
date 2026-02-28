@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     const resolvedPaymentMethod: 'CARD' | 'BANK_TRANSFER' =
       paymentMethod === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : 'CARD';
     const resolvedPaymentStatus: 'PAID' | 'AWAITING_PAYMENT' =
-      resolvedPaymentMethod === 'CARD' ? 'PAID' : 'AWAITING_PAYMENT';
+      'AWAITING_PAYMENT';
 
     if (!isUser && resolvedPaymentMethod === 'BANK_TRANSFER') {
       return NextResponse.json(
@@ -363,66 +363,67 @@ export async function POST(request: Request) {
       return createdOrder;
     });
 
-    // Send order confirmation email — non-blocking, never cancels the order
-    if (!process.env.RESEND_API_KEY) {
-      console.error('🚨 KRİTİK HATA: RESEND_API_KEY .env dosyasından okunamadı! Sunucuyu kapatıp açtığınızdan emin olun.');
-    } else {
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
+    if (resolvedPaymentMethod !== 'CARD') {
+      if (!process.env.RESEND_API_KEY) {
+        console.error('🚨 KRİTİK HATA: RESEND_API_KEY .env dosyasından okunamadı! Sunucuyu kapatıp açtığınızdan emin olun.');
+      } else {
+        try {
+          const resend = new Resend(process.env.RESEND_API_KEY);
 
-        const emailHtml = await render(
-          OrderConfirmation({
-            orderNumber: order.barcode || `#${order.id.slice(-8)}`,
-            customerName: order.user?.name || `${order.guestFirstName ?? ''} ${order.guestLastName ?? ''}`.trim() || 'Değerli Müşterimiz',
-            customerEmail: order.user?.email || order.guestEmail || '',
-            paymentMethod: order.paymentMethod,
-            items: order.items.map(item => ({
-              productName: item.productName,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              totalPrice: item.totalPrice,
-              imageUrl: item.imageUrl,
-            })),
-            totalAmount: order.totalAmount,
-            orderDate: order.createdAt.toISOString(),
-            shippingAddress: order.address ? {
-              title: order.address.title || undefined,
-              line1: order.address.line1,
-              line2: order.address.line2 || undefined,
-              district: order.address.district || undefined,
-              city: order.address.city,
-              postalCode: order.address.postalCode || undefined,
-            } : (!isUser ? {
-              title: `${order.guestFirstName ?? ''} ${order.guestLastName ?? ''}`.trim() || undefined,
-              line1: order.guestAddress || '',
-              line2: undefined,
-              district: order.guestDistrict || undefined,
-              city: order.guestCity || '',
-              postalCode: undefined,
-            } : undefined),
-          })
-        );
+          const emailHtml = await render(
+            OrderConfirmation({
+              orderNumber: order.barcode || `#${order.id.slice(-8)}`,
+              customerName: order.user?.name || `${order.guestFirstName ?? ''} ${order.guestLastName ?? ''}`.trim() || 'Değerli Müşterimiz',
+              customerEmail: order.user?.email || order.guestEmail || '',
+              paymentMethod: order.paymentMethod,
+              items: order.items.map(item => ({
+                productName: item.productName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.totalPrice,
+                imageUrl: item.imageUrl,
+              })),
+              totalAmount: order.totalAmount,
+              orderDate: order.createdAt.toISOString(),
+              shippingAddress: order.address ? {
+                title: order.address.title || undefined,
+                line1: order.address.line1,
+                line2: order.address.line2 || undefined,
+                district: order.address.district || undefined,
+                city: order.address.city,
+                postalCode: order.address.postalCode || undefined,
+              } : (!isUser ? {
+                title: `${order.guestFirstName ?? ''} ${order.guestLastName ?? ''}`.trim() || undefined,
+                line1: order.guestAddress || '',
+                line2: undefined,
+                district: order.guestDistrict || undefined,
+                city: order.guestCity || '',
+                postalCode: undefined,
+              } : undefined),
+            })
+          );
 
-        const adminEmail = process.env.ADMIN_EMAIL || 'volkanongunn@gmail.com';
-        const customerEmail = order.user?.email || order.guestEmail || adminEmail;
+          const adminEmail = process.env.ADMIN_EMAIL || 'volkanongunn@gmail.com';
+          const customerEmail = order.user?.email || order.guestEmail || adminEmail;
 
-        console.log('📧 RESEND GÖNDERİLİYOR:', { to: customerEmail, bcc: adminEmail, orderNo: order.barcode });
+          console.log('📧 RESEND GÖNDERİLİYOR:', { to: customerEmail, bcc: adminEmail, orderNo: order.barcode });
 
-        const { data, error } = await resend.emails.send({
-          from: 'MatbaaGross Sipariş <noreply@matbaagross.com>',
-          to: customerEmail,
-          bcc: [adminEmail],
-          subject: `Siparişiniz Alındı! 🚀 - MatbaaGross`,
-          html: emailHtml,
-        });
+          const { data, error } = await resend.emails.send({
+            from: 'MatbaaGross Sipariş <noreply@matbaagross.com>',
+            to: customerEmail,
+            bcc: [adminEmail],
+            subject: `Siparişiniz Alındı! 🚀 - MatbaaGross`,
+            html: emailHtml,
+          });
 
-        if (error) {
-          console.error('❌ RESEND GÖNDERİM HATASI:', JSON.stringify(error));
-        } else {
-          console.log('✅ RESEND BAŞARILI:', data);
+          if (error) {
+            console.error('❌ RESEND GÖNDERİM HATASI:', JSON.stringify(error));
+          } else {
+            console.log('✅ RESEND BAŞARILI:', data);
+          }
+        } catch (emailError) {
+          console.error('❌ RESEND GÖNDERİM HATASI:', emailError instanceof Error ? emailError.message : emailError, emailError);
         }
-      } catch (emailError) {
-        console.error('❌ RESEND GÖNDERİM HATASI:', emailError instanceof Error ? emailError.message : emailError, emailError);
       }
     }
 

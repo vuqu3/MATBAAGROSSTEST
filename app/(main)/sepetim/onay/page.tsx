@@ -32,6 +32,7 @@ interface SavedAddress {
   id: string;
   type: 'BILLING' | 'SHIPPING';
   title: string | null;
+  phone: string | null;
   city: string;
   district: string | null;
   line1: string;
@@ -39,27 +40,6 @@ interface SavedAddress {
   postalCode: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-function formatCardNumber(value: string) {
-  return value
-    .replace(/\D/g, '')
-    .slice(0, 16)
-    .replace(/(.{4})/g, '$1 ')
-    .trim();
-}
-
-function formatExpiry(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 4);
-  if (digits.length >= 3) return digits.slice(0, 2) + '/' + digits.slice(2);
-  return digits;
-}
-
-interface CardForm {
-  cardName: string;
-  cardNumber: string;
-  expiry: string;
-  cvv: string;
 }
 
 type PaymentMethod = 'CARD' | 'BANK_TRANSFER';
@@ -83,13 +63,6 @@ function OnayPageInner() {
     address: '',
   });
 
-  const [cardForm, setCardForm] = useState<CardForm>({
-    cardName: '',
-    cardNumber: '',
-    expiry: '',
-    cvv: '',
-  });
-
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CARD');
 
   const [loading, setLoading] = useState(false);
@@ -102,6 +75,7 @@ function OnayPageInner() {
   const [cartReady, setCartReady] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [termsError, setTermsError] = useState(false);
+  const [paytrToken, setPaytrToken] = useState<string | null>(null);
 
   // Fetch user addresses from database — only re-run when session changes, NOT on address selection
   useEffect(() => {
@@ -149,13 +123,6 @@ function OnayPageInner() {
 
   const handleAddressChange = (field: keyof AddressForm, value: string) => {
     setAddressForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleCardChange = (field: keyof CardForm, value: string) => {
-    if (field === 'cardNumber') value = formatCardNumber(value);
-    if (field === 'expiry') value = formatExpiry(value);
-    if (field === 'cvv') value = value.replace(/\D/g, '').slice(0, 3);
-    setCardForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleAddressSelect = (addressId: string) => {
@@ -212,16 +179,10 @@ function OnayPageInner() {
     );
   };
 
-  const isCardValid =
-    cardForm.cardName.trim().length >= 2 &&
-    cardForm.cardNumber.replace(/\s/g, '').length === 16 &&
-    cardForm.expiry.length === 5 &&
-    cardForm.cvv.length === 3;
-
   const transferDiscountEligible = paymentMethod === 'BANK_TRANSFER' && !isGuest;
   const transferDiscount = transferDiscountEligible ? totalAmount * 0.05 : 0;
   const discountedSubtotal = Math.max(0, totalAmount - transferDiscount);
-  const effectiveHasFreeShipping = discountedSubtotal >= freeShippingThreshold;
+  const effectiveHasFreeShipping = totalAmount >= freeShippingThreshold;
   const effectiveShippingCost = effectiveHasFreeShipping ? 0 : shippingFee;
   const effectiveGrandTotal = discountedSubtotal + effectiveShippingCost;
 
@@ -231,7 +192,6 @@ function OnayPageInner() {
     items.length > 0 &&
     isAddressValid() &&
     agreedToTerms &&
-    (paymentMethod !== 'CARD' || Boolean(isCardValid)) &&
     !(isGuest && paymentMethod === 'BANK_TRANSFER');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -245,7 +205,7 @@ function OnayPageInner() {
       router.push('/login');
       return;
     }
-    if (!isAddressValid() || (paymentMethod === 'CARD' && !isCardValid) || items.length === 0) return;
+    if (!isAddressValid() || items.length === 0) return;
 
     setLoading(true);
     setStep('processing');
@@ -264,6 +224,7 @@ function OnayPageInner() {
           body: JSON.stringify({
             type: 'SHIPPING',
             title: `${addressForm.firstName} ${addressForm.lastName}`.trim() || 'Teslimat Adresi',
+            phone: addressForm.phone,
             city: addressForm.city,
             district: addressForm.district,
             line1: addressForm.address,
@@ -325,10 +286,7 @@ function OnayPageInner() {
 
       if (res.ok) {
         console.log('CHECKOUT_SUCCESS:', responseData);
-        
-        // Clear cart
-        clearCart();
-        
+
         // Revalidate orders page to show new order immediately
         await fetch('/api/revalidate', {
           method: 'POST',
@@ -340,10 +298,31 @@ function OnayPageInner() {
 
         setStep('done');
 
-        const orderNo = responseData.barcode || responseData.orderNumber || responseData.id || '';
-        setTimeout(() => {
-          router.push('/siparis-basarili' + (orderNo ? `?orderNo=${encodeURIComponent(orderNo)}` : ''));
-        }, 800);
+        const createdOrderId = String(responseData.id || '').trim();
+        const isCardFlow = (isGuest ? 'CARD' : paymentMethod) === 'CARD';
+        if (isCardFlow && createdOrderId) {
+          const tokenRes = await fetch('/api/payment/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: createdOrderId }),
+          });
+          const tokenData = await tokenRes.json();
+          if (!tokenRes.ok) {
+            throw new Error(tokenData?.error || 'PayTR token alınamadı');
+          }
+          const token = String(tokenData?.token || '').trim();
+          if (!token) {
+            throw new Error('PayTR token alınamadı');
+          }
+          setPaytrToken(token);
+          setLoading(false);
+          setStep('form');
+        } else {
+          const orderNo = responseData.barcode || responseData.orderNumber || responseData.id || '';
+          setTimeout(() => {
+            router.push('/siparis-basarili' + (orderNo ? `?orderNo=${encodeURIComponent(orderNo)}` : ''));
+          }, 800);
+        }
       } else {
         console.error('CHECKOUT_ERROR:', responseData);
         throw new Error(responseData.error || 'Sipariş oluşturulurken hata oluştu');
@@ -365,7 +344,8 @@ function OnayPageInner() {
   const labelClass = 'block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+      <div className="min-h-screen bg-gray-50">
       {/* Header bar */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -692,106 +672,19 @@ function OnayPageInner() {
                     </div>
                   ) : null}
 
-                  {/* Card preview strip */}
                   {paymentMethod === 'CARD' ? (
-                  <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-4 text-white relative overflow-hidden">
-                    <div className="absolute inset-0 opacity-10"
-                      style={{
-                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.05) 10px, rgba(255,255,255,0.05) 20px)',
-                      }}
-                    />
-                    <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-6">
-                        <div className="text-xs text-gray-400 uppercase tracking-widest">Kredi Kartı</div>
-                        <div className="flex items-center gap-0.5">
-                          <div className="w-6 h-6 rounded-full bg-[#EB001B] opacity-80" />
-                          <div className="w-6 h-6 rounded-full bg-[#F79E1B] opacity-80 -ml-2" />
-                        </div>
-                      </div>
-                      <div className="text-lg font-mono tracking-widest mb-3 text-gray-100">
-                        {cardForm.cardNumber || '•••• •••• •••• ••••'}
-                      </div>
-                      <div className="flex justify-between items-end">
-                        <div>
-                          <div className="text-[10px] text-gray-500 uppercase">Kart Sahibi</div>
-                          <div className="text-sm font-medium text-gray-200 uppercase">
-                            {cardForm.cardName || 'AD SOYAD'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-gray-500 uppercase">Son Kullanma</div>
-                          <div className="text-sm font-medium text-gray-200">
-                            {cardForm.expiry || 'AA/YY'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  ) : null}
-
-                  {paymentMethod === 'CARD' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className={labelClass}>Kart Üzerindeki İsim</label>
-                      <input
-                        type="text"
-                        className={inputClass}
-                        placeholder="AD SOYAD"
-                        value={cardForm.cardName}
-                        onChange={(e) => handleCardChange('cardName', e.target.value.toUpperCase())}
-                        required={paymentMethod === 'CARD'}
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className={labelClass}>Kart Numarası</label>
-                      <input
-                        type="text"
-                        className={inputClass + ' font-mono tracking-widest'}
-                        placeholder="0000 0000 0000 0000"
-                        value={cardForm.cardNumber}
-                        onChange={(e) => handleCardChange('cardNumber', e.target.value)}
-                        maxLength={19}
-                        required={paymentMethod === 'CARD'}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Son Kullanma Tarihi</label>
-                      <input
-                        type="text"
-                        className={inputClass + ' font-mono'}
-                        placeholder="AA/YY"
-                        value={cardForm.expiry}
-                        onChange={(e) => handleCardChange('expiry', e.target.value)}
-                        maxLength={5}
-                        required={paymentMethod === 'CARD'}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>CVV</label>
-                      <div className="relative">
-                        <input
-                          type="password"
-                          className={inputClass + ' font-mono'}
-                          placeholder="•••"
-                          value={cardForm.cvv}
-                          onChange={(e) => handleCardChange('cvv', e.target.value)}
-                          maxLength={3}
-                          required={paymentMethod === 'CARD'}
+                    <div className="border border-gray-200 bg-gray-50 rounded-xl p-4 text-sm text-gray-700">
+                      <div className="flex items-center gap-3">
+                        <Image
+                          src="/paytr-logo.svg"
+                          alt="PayTR Güvenli Ödeme"
+                          width={120}
+                          height={32}
+                          className="h-8 w-auto"
                         />
-                        <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <p>Kart bilgilerinizi bir sonraki adımda PayTR güvenli ödeme ekranında gireceksiniz.</p>
                       </div>
                     </div>
-                  </div>
-                  ) : null}
-
-                  {/* Security note */}
-                  {paymentMethod === 'CARD' ? (
-                  <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-                    <Lock size={13} className="text-green-600 flex-shrink-0" />
-                    <p className="text-xs text-green-700">
-                      Kart bilgileriniz 256-bit SSL şifreleme ile korunmaktadır. Bilgileriniz hiçbir şekilde saklanmaz.
-                    </p>
-                  </div>
                   ) : null}
                 </div>
               </div>
@@ -957,7 +850,29 @@ function OnayPageInner() {
           </div>
         </form>
       </div>
-    </div>
+      </div>
+
+      {paytrToken ? (
+        <div className="fixed inset-0 z-[9999] bg-black/75 flex items-center justify-center px-4 py-6">
+          <div className="relative bg-white rounded-2xl w-full max-w-[600px] h-[700px] shadow-2xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setPaytrToken(null)}
+              className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/90 hover:bg-white border border-gray-200 text-gray-700 flex items-center justify-center"
+              aria-label="Kapat"
+            >
+              X
+            </button>
+            <iframe
+              src={`https://www.paytr.com/odeme/guvenli/${paytrToken}`}
+              className="w-full h-full border-none rounded-xl"
+              frameBorder={0}
+              title="PayTR Ödeme"
+            />
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 

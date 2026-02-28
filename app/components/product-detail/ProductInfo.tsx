@@ -110,16 +110,21 @@ export default function ProductInfo({
             {variants.map((v) => {
               const discount = getVariantDiscount(v.price, v.name, effectiveUnitPrice);
               const isSelected = selectedVariant?.id === v.id;
+              const isOutOfStock = Number(v.stock) <= 0;
               return (
                 <button
                   key={v.id}
                   type="button"
-                  onClick={() => onVariantChange?.(isSelected ? null : v)}
+                  onClick={() => {
+                    if (isOutOfStock) return;
+                    onVariantChange?.(isSelected ? null : v);
+                  }}
+                  disabled={isOutOfStock}
                   className={`relative flex flex-col items-start px-4 py-3 rounded-xl border-2 text-left transition-all min-w-[110px] ${
                     isSelected
                       ? 'border-[#FF6000] bg-orange-50 shadow-sm ring-1 ring-[#FF6000]/30'
                       : 'border-gray-200 bg-white hover:border-orange-300 hover:shadow-sm'
-                  }`}
+                  } ${isOutOfStock ? 'opacity-50 cursor-not-allowed hover:border-gray-200 hover:shadow-none' : ''}`}
                 >
                   {discount !== null && (
                     <span className="absolute -top-2.5 -right-2 text-[10px] bg-orange-500 text-white font-bold px-1.5 py-0.5 rounded-full leading-tight shadow-sm">
@@ -136,6 +141,9 @@ export default function ProductInfo({
                   }`}>
                     {v.price.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL
                   </span>
+                  {isOutOfStock ? (
+                    <span className="text-[11px] text-red-600 font-semibold mt-1">Stokta Yok</span>
+                  ) : null}
                 </button>
               );
             })}
@@ -263,24 +271,6 @@ export default function ProductInfo({
           </div>
         </div>
       )}
-
-      {/* Ödeme Seçenekleri - güven bloku */}
-      <div className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
-        <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <CreditCard className="h-4 w-4 text-gray-600" />
-          Ödeme Seçenekleri
-        </h2>
-        <p className="text-sm text-gray-600 mb-3">
-          Taksit imkanı, havale/EFT ve kredi kartı ile güvenli ödeme.
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 rounded-lg text-xs font-medium text-gray-700">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-            Güvenli Ödeme
-          </span>
-          <span className="text-xs text-gray-500">2–12 Taksit</span>
-        </div>
-      </div>
     </div>
   );
 }

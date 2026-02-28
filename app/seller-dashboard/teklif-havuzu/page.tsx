@@ -2,29 +2,24 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, CalendarDays, Clock, FileText, Package, X } from 'lucide-react';
+import { AlertTriangle, FileText, Package, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSession } from 'next-auth/react';
-
-function formatRemaining(expiresAt: string) {
-  const end = new Date(expiresAt).getTime();
-  const diff = Math.max(0, end - Date.now());
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  return `${hours} sa ${minutes} dk`;
-}
 
 export default function TeklifHavuzuPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const COMMISSION_RATE = 0.1;
   const [openRequestNo, setOpenRequestNo] = useState<string | null>(null);
-  const [priceInput, setPriceInput] = useState<string>('');
-  const [deliveryDaysInput, setDeliveryDaysInput] = useState<string>('');
+  const [unitPriceInput, setUnitPriceInput] = useState<string>('');
+  const [totalPriceInput, setTotalPriceInput] = useState<string>('');
+  const [deliveryTimeInput, setDeliveryTimeInput] = useState<string>('');
   const [sellerNote, setSellerNote] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
-  const [quotes, setQuotes] = useState<any[]>([]);
+  const [offers, setOffers] = useState<any[]>([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Mevcut satıcının vendorId'si (session'dan gelecek)
   const currentVendorId = session?.user?.id;
@@ -33,39 +28,44 @@ export default function TeklifHavuzuPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const res = await fetch('/api/seller/quotes');
-        if (res.ok) {
-          const data = await res.json();
-          setRequests(data.requests || []);
-          setQuotes(data.quotes || []);
+        setLoadError(null);
+        const res = await fetch('/api/seller/premium-quotes', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setLoadError(typeof data?.error === 'string' ? data.error : 'Veriler alınamadı');
+          setRequests([]);
+          setOffers([]);
+          return;
         }
+
+        console.log('Bulunan Talepler:', data?.requests);
+        setRequests(data?.requests || []);
+        setOffers(data?.offers || []);
       } catch (error) {
         console.error('Error loading quotes:', error);
+        setLoadError('Veriler alınamadı');
       } finally {
         setLoading(false);
       }
     };
 
-    if (currentVendorId) {
-      loadData();
-    }
-  }, [currentVendorId]);
+    loadData();
+  }, []);
 
   // Teklif ekleme fonksiyonu
   const addQuote = async (quoteData: any) => {
     try {
-      const res = await fetch('/api/seller/quotes', {
+      const res = await fetch('/api/seller/premium-quotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(quoteData),
       });
       if (res.ok) {
         const newQuote = await res.json();
-        setQuotes(prev => [newQuote, ...prev]);
+        setOffers((prev) => [newQuote, ...prev]);
         // Request listesini güncelle
-        setRequests(prev => prev.map(r => 
-          r.id === quoteData.requestId ? { ...r, hasQuoted: true } : r
-        ));
+        setRequests((prev) => prev.map((r) => (r.id === quoteData.requestId ? { ...r, hasQuoted: true } : r)));
+        router.push('/seller-dashboard/verilen-teklifler');
       }
     } catch (error) {
       console.error('Error adding quote:', error);
@@ -75,7 +75,7 @@ export default function TeklifHavuzuPage() {
   const rows = useMemo(() => {
     return requests.map((r) => ({
       ...r,
-      remaining: formatRemaining(r.expiresAt),
+      createdAtText: r.createdAt ? new Date(r.createdAt).toLocaleString('tr-TR') : '-',
     }));
   }, [requests]);
 
@@ -84,11 +84,21 @@ export default function TeklifHavuzuPage() {
     return requests.find((r) => r.requestNo === openRequestNo) ?? null;
   }, [openRequestNo, requests]);
 
+  const selectedFilePreview = useMemo(() => {
+    if (!selectedRequest?.fileUrl) return { isImage: false, url: '' };
+    const u = String(selectedRequest.fileUrl);
+    const lower = u.toLowerCase();
+    const isImage = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].some((ext) => lower.includes(ext));
+    return { isImage, url: u };
+  }, [selectedRequest]);
+
   const competitionInfo = useMemo(() => {
     if (!openRequestNo) return null;
-    const requestQuotes = quotes.filter((q) => q.requestNo === openRequestNo);
-    const offersCount = requestQuotes.length;
-    const lowest = requestQuotes.length ? Math.min(...requestQuotes.map((q) => q.price)) : null;
+    const requestOffers = offers.filter((q) => q.requestNo === openRequestNo);
+    const offersCount = requestOffers.length;
+    const lowest = requestOffers.length
+      ? Math.min(...requestOffers.map((q) => Number(q.totalPrice ?? q.price)))
+      : null;
 
     // Demo “rekabet barı”: toplam 10 koltuk varmış gibi davranalım.
     const totalSlots = 10;
@@ -99,28 +109,46 @@ export default function TeklifHavuzuPage() {
       lowest,
       remainingSlots,
     };
-  }, [openRequestNo, quotes]);
+  }, [openRequestNo, offers]);
 
-  const numericPrice = useMemo(() => {
-    const normalized = priceInput.replace(/\./g, '').replace(',', '.');
+  const parseMoney = (raw: string) => {
+    const normalized = raw.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
     const n = Number(normalized);
     return Number.isFinite(n) && n > 0 ? n : null;
-  }, [priceInput]);
+  };
 
-  const numericDeliveryDays = useMemo(() => {
-    const n = Number(deliveryDaysInput);
-    return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
-  }, [deliveryDaysInput]);
+  const roundTo = (n: number, digits: number) => {
+    const m = 10 ** digits;
+    return Math.round(n * m) / m;
+  };
+
+  const quantity = useMemo(() => {
+    const q = Number(selectedRequest?.quantity);
+    return Number.isFinite(q) && q > 0 ? q : null;
+  }, [selectedRequest?.quantity]);
+
+  const numericUnitPrice = useMemo(() => parseMoney(unitPriceInput), [unitPriceInput]);
+  const numericTotalPrice = useMemo(() => parseMoney(totalPriceInput), [totalPriceInput]);
+
+  const cleanedDeliveryTime = useMemo(() => deliveryTimeInput.trim(), [deliveryTimeInput]);
 
   const finalPrice = useMemo(() => {
-    if (!numericPrice) return null;
-    return Math.round(numericPrice * (1 + COMMISSION_RATE));
-  }, [numericPrice]);
+    if (!numericTotalPrice) return null;
+    return Math.round(numericTotalPrice * (1 + COMMISSION_RATE));
+  }, [numericTotalPrice]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-gray-500">Yükleniyor...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-gray-600">{loadError}</div>
       </div>
     );
   }
@@ -166,7 +194,7 @@ export default function TeklifHavuzuPage() {
                 <th className="text-left font-semibold text-gray-600 px-4 py-3">
                   Müşteri Talebi &amp; Spesifikasyonlar
                 </th>
-                <th className="text-left font-semibold text-gray-600 px-4 py-3">Kalan Süre</th>
+                <th className="text-left font-semibold text-gray-600 px-4 py-3">Oluşturulma</th>
                 <th className="text-right font-semibold text-gray-600 px-4 py-3">İşlem</th>
               </tr>
             </thead>
@@ -187,10 +215,10 @@ export default function TeklifHavuzuPage() {
                           <div className="min-w-0">
                             <p className="text-xs text-gray-500">Talep Özeti</p>
                             <p className="mt-0.5 text-sm font-semibold text-gray-900 truncate">
-                              {(r.requestSummary?.trim() || r.technicalDetails?.trim() || r.productGroup || '-')
+                              {(r.description?.trim() || r.technicalDetails?.trim() || r.productName || '-')
                                 .toString()
                                 .slice(0, 120)}
-                              {((r.requestSummary?.trim() || r.technicalDetails?.trim() || r.productGroup || '').toString().length || 0) >
+                              {((r.description?.trim() || r.technicalDetails?.trim() || r.productName || '').toString().length || 0) >
                               120
                                 ? '...'
                                 : ''}
@@ -202,12 +230,12 @@ export default function TeklifHavuzuPage() {
                           </div>
                         </div>
 
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
                             <FileText className="h-4 w-4 text-gray-700" />
                             <div className="min-w-0">
-                              <p className="text-[11px] text-gray-500 font-semibold">Kategori</p>
-                              <p className="text-xs font-semibold text-gray-900 truncate">{r.productGroup || '-'}</p>
+                              <p className="text-[11px] text-gray-500 font-semibold">Ürün</p>
+                              <p className="text-xs font-semibold text-gray-900 truncate">{r.productName || '-'}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
@@ -219,54 +247,28 @@ export default function TeklifHavuzuPage() {
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
-                            <CalendarDays className="h-4 w-4 text-gray-700" />
-                            <div className="min-w-0">
-                              <p className="text-[11px] text-gray-500 font-semibold">Termin</p>
-                              <p className="text-xs font-semibold text-gray-900 truncate">{r.deadlineExpectation || '-'}</p>
-                            </div>
-                          </div>
                         </div>
-
-                        {r.attachment?.name ? (
-                          <div className="mt-2 text-xs text-gray-500">
-                            Ek: <span className="font-semibold text-gray-700">{r.attachment.name}</span>
-                          </div>
-                        ) : null}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-2 text-gray-700">
-                        <Clock className="h-4 w-4 text-orange-500" />
-                        {r.remaining}
-                      </span>
+                      <span className="text-gray-700">{r.createdAtText}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end">
-                        {r.hasQuoted ? (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-orange-700 font-semibold hover:bg-orange-100 transition-colors"
-                            onClick={() => router.push('/seller-dashboard/verilen-teklifler')}
-                          >
-                            <FileText className="h-4 w-4" />
-                            Zaten Teklif Verdiniz
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-2 rounded-lg bg-[#FF6000] px-3 py-2 text-white font-semibold hover:bg-[#e55a00] transition-colors"
-                            onClick={() => {
-                              setOpenRequestNo(r.requestNo);
-                              setPriceInput('');
-                              setDeliveryDaysInput('');
-                              setSellerNote('');
-                            }}
-                          >
-                            <FileText className="h-4 w-4" />
-                            Teklif Ver
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 rounded-lg bg-[#FF6000] px-3 py-2 text-white font-semibold hover:bg-[#e55a00] transition-colors"
+                          onClick={() => {
+                            setOpenRequestNo(r.requestNo);
+                            setUnitPriceInput('');
+                            setTotalPriceInput('');
+                            setDeliveryTimeInput('');
+                            setSellerNote('');
+                          }}
+                        >
+                          <FileText className="h-4 w-4" />
+                          Teklif Ver
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -300,10 +302,7 @@ export default function TeklifHavuzuPage() {
                   <h2 className="text-lg font-bold text-gray-900">
                     Talep: <span className="font-mono">{selectedRequest.requestNo}</span>
                   </h2>
-                  {selectedRequest.productTitle ? (
-                    <p className="text-sm font-semibold text-gray-900 mt-0.5">{selectedRequest.productTitle}</p>
-                  ) : null}
-                  <p className="text-sm text-gray-600 mt-0.5">{selectedRequest.productGroup}</p>
+                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{selectedRequest.productName}</p>
                 </div>
 
                 <button
@@ -319,15 +318,15 @@ export default function TeklifHavuzuPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-4">
                     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                      {selectedRequest.attachmentDataUrl && selectedRequest.attachmentMime?.startsWith('image/') ? (
+                      {selectedFilePreview.isImage ? (
                         <img
-                          src={selectedRequest.attachmentDataUrl}
-                          alt="Müşteri görseli"
+                          src={selectedFilePreview.url}
+                          alt="Müşteri dosyası"
                           className="w-full h-48 object-contain"
                         />
                       ) : (
                         <div className="h-48 flex items-center justify-center text-sm font-semibold text-gray-500">
-                          Görsel eklenmedi
+                          Dosya önizlemesi yok
                         </div>
                       )}
                     </div>
@@ -339,7 +338,7 @@ export default function TeklifHavuzuPage() {
                       <div className="mt-3 space-y-3">
                         <div className="flex items-start justify-between gap-4">
                           <p className="text-sm text-gray-600">Ürün</p>
-                          <p className="text-sm font-semibold text-gray-900 text-right">{selectedRequest.productGroup || '-'}</p>
+                          <p className="text-sm font-semibold text-gray-900 text-right">{selectedRequest.productName || '-'}</p>
                         </div>
 
                         <div className="flex items-start justify-between gap-4">
@@ -360,30 +359,23 @@ export default function TeklifHavuzuPage() {
                           </div>
                         ) : null}
 
-                        {selectedRequest.requestSummary?.trim() ? (
+                        {selectedRequest.description?.trim() ? (
                           <div className="rounded-xl border border-gray-200 bg-white p-4">
                             <p className="text-xs font-semibold text-gray-600">Talep Özeti</p>
-                            <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">{selectedRequest.requestSummary}</p>
+                            <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">{selectedRequest.description}</p>
                           </div>
                         ) : null}
 
-                        {selectedRequest.attachment?.name ? (
+                        {selectedRequest.fileUrl ? (
                           <div>
                             <a
-                              href="#"
-                              onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
-                                e.preventDefault();
-                                alert(`Ekli dosya (demo): ${selectedRequest.attachment?.name}`);
-                              }}
+                              href={selectedRequest.fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
                               className="text-sm font-semibold text-[#FF6000] hover:underline"
                             >
-                              Ekli Dosyayı İncele ({selectedRequest.attachment.name})
+                              Ekli Dosyayı İncele
                             </a>
-                            {typeof selectedRequest.attachment.size === 'number' && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                Boyut: {Math.round(selectedRequest.attachment.size / 1024).toLocaleString('tr-TR')} KB
-                              </p>
-                            )}
                           </div>
                         ) : null}
                       </div>
@@ -421,24 +413,60 @@ export default function TeklifHavuzuPage() {
                     <div className="rounded-2xl border border-gray-200 bg-white p-5">
                       <div className="flex flex-col gap-4">
                         <div>
-                          <label className="block text-sm font-semibold text-gray-800">Fiyat (TL)</label>
+                          <label className="block text-sm font-semibold text-gray-800">Fiyatlandırma</label>
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-700">Birim Fiyat (TL)</label>
+                              <input
+                                value={unitPriceInput}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                  const next = e.target.value;
+                                  setUnitPriceInput(next);
+                                  const n = parseMoney(next);
+                                  if (!quantity || !n) return;
+                                  const t = roundTo(n * quantity, 2);
+                                  setTotalPriceInput(String(t));
+                                }}
+                                inputMode="decimal"
+                                placeholder="Örn: 0,10"
+                                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-orange-200"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-700">Toplam Fiyat (TL)</label>
+                              <input
+                                value={totalPriceInput}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                  const next = e.target.value;
+                                  setTotalPriceInput(next);
+                                  const n = parseMoney(next);
+                                  if (!quantity || !n) return;
+                                  const u = roundTo(n / quantity, 4);
+                                  setUnitPriceInput(String(u));
+                                }}
+                                inputMode="decimal"
+                                placeholder="Örn: 1500"
+                                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-orange-200"
+                              />
+                            </div>
+                          </div>
+                          <p className="mt-2 text-xs text-gray-500">
+                            Adet: <span className="font-semibold text-gray-800">{quantity ? quantity.toLocaleString('tr-TR') : '-'}</span>
+                          </p>
                           <input
-                            value={priceInput}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPriceInput(e.target.value)}
-                            inputMode="decimal"
-                            placeholder="Örn: 1450"
-                            className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-orange-200"
+                            value=""
+                            readOnly
+                            className="hidden"
                           />
                         </div>
 
                         <div className="flex flex-col sm:flex-row gap-3">
                           <div className="flex-1">
-                            <label className="block text-sm font-semibold text-gray-800">Termin Süresi (Gün)</label>
+                            <label className="block text-sm font-semibold text-gray-800">Teslimat Süresi</label>
                             <input
-                              value={deliveryDaysInput}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDeliveryDaysInput(e.target.value)}
-                              inputMode="numeric"
-                              placeholder="Örn: 5"
+                              value={deliveryTimeInput}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDeliveryTimeInput(e.target.value)}
+                              placeholder="Örn: 5 iş günü"
                               className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-orange-200"
                             />
                           </div>
@@ -458,19 +486,9 @@ export default function TeklifHavuzuPage() {
 
                         <button
                           type="button"
-                          disabled={!numericPrice || !numericDeliveryDays}
+                          disabled={!numericTotalPrice || !cleanedDeliveryTime}
                           className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#FF6000] px-4 py-3 text-white font-extrabold hover:bg-[#e55a00] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                          onClick={() => {
-                            if (!numericPrice) return;
-                            if (!numericDeliveryDays) return;
-                            addQuote({
-                              requestId: selectedRequest.id,
-                              price: numericPrice,
-                              deliveryDays: numericDeliveryDays,
-                              sellerNote: sellerNote.trim() ? sellerNote.trim() : undefined,
-                            });
-                            setOpenRequestNo(null);
-                          }}
+                          onClick={() => setShowConfirmModal(true)}
                         >
                           Teklifi Ateşle
                         </button>
@@ -481,6 +499,64 @@ export default function TeklifHavuzuPage() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirmModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowConfirmModal(false)}
+          >
+            <motion.div
+              className="w-full max-w-md rounded-2xl bg-white shadow-xl"
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 20 }}
+              onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+            >
+              <div className="p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Teklif Onayı</h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  Verdiğiniz teklif müşteri tarafından görüntülenecek. Lütfen fiyatlarınızı ve maliyetlerinizi kontrol edin. Onaylıyor musunuz?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+                    onClick={() => setShowConfirmModal(false)}
+                  >
+                    İptal
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg bg-[#FF6000] px-4 py-2 text-white font-semibold hover:bg-[#e55a00] transition-colors"
+                    onClick={() => {
+                      if (!numericTotalPrice) return;
+                      if (!cleanedDeliveryTime) return;
+                      addQuote({
+                        requestId: selectedRequest!.id,
+                        price: numericTotalPrice,
+                        unitPrice: numericUnitPrice,
+                        totalPrice: numericTotalPrice,
+                        deliveryTime: cleanedDeliveryTime,
+                        note: sellerNote.trim() ? sellerNote.trim() : '',
+                      });
+                      setOpenRequestNo(null);
+                      setShowConfirmModal(false);
+                    }}
+                  >
+                    Onayla
+                  </button>
                 </div>
               </div>
             </motion.div>

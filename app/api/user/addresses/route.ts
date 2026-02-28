@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { type, title, city, district, line1, line2, postalCode } = body;
+    const { type, title, city, district, line1, line2, postalCode, phone } = body;
 
     const typeVal = type === 'BILLING' || type === 'SHIPPING' ? type : 'SHIPPING';
     if (!city || !line1) {
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
         userId: userExists.id,
         type: typeVal,
         title: title ? String(title).trim() : null,
+        phone: phone ? String(phone).trim() : null,
         city: String(city).trim(),
         district: district ? String(district).trim() : null,
         line1: String(line1).trim(),

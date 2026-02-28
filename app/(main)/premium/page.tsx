@@ -1,9 +1,10 @@
 ﻿'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { Suspense, useRef, useState, useCallback, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Playfair_Display } from 'next/font/google';
 import {
   FileText,
@@ -15,11 +16,10 @@ import {
   RotateCcw,
   Palette,
   Upload,
-  Lock,
-  Factory,
   Package,
   PhoneCall,
   Copy,
+  ShieldCheck,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import PremiumWelcomeModal from './PremiumWelcomeModal';
@@ -34,9 +34,16 @@ const playfair = Playfair_Display({
   display: 'swap',
 });
 
-export default function PremiumPage() {
+type SelectedProduct = {
+  id: string;
+  name: string;
+  imageUrl?: string | null;
+};
+
+function PremiumPageInner() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { addRequest } = useOffers();
   const formRef = useRef<HTMLDivElement>(null);
   const [welcomeOpen, setWelcomeOpen] = useState(true);
@@ -47,6 +54,9 @@ export default function PremiumPage() {
   const [successOpen, setSuccessOpen] = useState(false);
   const [createdRequestNo, setCreatedRequestNo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<SelectedProduct | null>(null);
+  const [selectedProductLoading, setSelectedProductLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
     productTitle: '',
@@ -56,11 +66,52 @@ export default function PremiumPage() {
     needExpertCall: false,
   });
 
+  const productId = searchParams.get('productId')?.trim() || null;
+
   const user = session?.user as { name?: string | null; email?: string | null; companyName?: string | null } | undefined;
   const displayName = user?.name || user?.email?.split('@')[0] || 'Üye';
   const companyName = user?.companyName || null;
 
   const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!productId) {
+        setSelectedProduct(null);
+        return;
+      }
+      setSelectedProductLoading(true);
+      try {
+        const res = await fetch(`/api/products/${encodeURIComponent(productId)}`, { cache: 'no-store' });
+        if (!res.ok) {
+          if (!cancelled) setSelectedProduct(null);
+          return;
+        }
+        const data = (await res.json()) as any;
+        const next: SelectedProduct = {
+          id: String(data.id),
+          name: String(data.name ?? ''),
+          imageUrl: (data.imageUrl ?? null) as string | null,
+        };
+        if (!cancelled) {
+          setSelectedProduct(next);
+          if (next.name) {
+            setForm((f) => ({ ...f, productTitle: f.productTitle || next.name }));
+          }
+        }
+      } catch {
+        if (!cancelled) setSelectedProduct(null);
+      } finally {
+        if (!cancelled) setSelectedProductLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -117,8 +168,11 @@ export default function PremiumPage() {
     return `MG-${dd}${mm}${yy}-${rand}`;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (submitting) return;
+    setSubmitting(true);
 
     const requestNo = generateRequestNo();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -138,23 +192,52 @@ export default function PremiumPage() {
       expiresAt,
     });
 
-    const payload = {
-      ...form,
-      requestNo,
-      userId: session?.user?.email,
-      displayName,
-      companyName,
-      file: uploadedFile ? { name: uploadedFile.name, size: uploadedFile.size } : null,
-      preview: uploadedPreview ? { mime: uploadedPreview.mime } : null,
-    };
-    console.log('Premium teklif formu:', payload);
+    try {
+      let fileUrl: string | null = null;
+      if (uploadedFile) {
+        const fd = new FormData();
+        fd.append('file', uploadedFile);
+        const resUpload = await fetch('/api/upload/customer-file', {
+          method: 'POST',
+          body: fd,
+        });
+        const uploadData = await resUpload.json().catch(() => ({}));
+        if (!resUpload.ok) {
+          throw new Error(uploadData?.error || 'Dosya yüklenemedi');
+        }
+        fileUrl = typeof uploadData?.url === 'string' ? uploadData.url : null;
+      }
 
-    setCreatedRequestNo(requestNo);
-    setSuccessOpen(true);
+      const res = await fetch('/api/quote-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestNo,
+          productId: productId || undefined,
+          productName: form.productTitle,
+          quantity: Number.isFinite(quantity) ? quantity : undefined,
+          description: form.requestSummary,
+          technicalDetails: form.technicalDetails,
+          fileUrl: fileUrl || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Talep kaydedilemedi');
+      }
+
+      setCreatedRequestNo(String(data?.requestNo || requestNo));
+      setSuccessOpen(true);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Talep kaydedilemedi');
+      return;
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="bg-slate-50 min-h-screen py-12">
       <PremiumWelcomeModal open={welcomeOpen} onClose={() => setWelcomeOpen(false)} />
 
       <AnimatePresence>
@@ -252,279 +335,235 @@ export default function PremiumPage() {
           </motion.div>
         )}
       </AnimatePresence>
-      {/* Hero */}
-      <section
-        className="relative min-h-[75vh] flex flex-col items-center justify-center text-center px-4 py-20 overflow-hidden"
-        style={{
-          background: `linear-gradient(135deg, ${MIDNIGHT} 0%, #1e293b 50%, #0c1222 100%)`,
-        }}
-      >
-        <div
-          className="absolute inset-0 opacity-40"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }}
-        />
-        <div className="relative z-10 max-w-4xl mx-auto">
-          <p
-            className="text-sm uppercase tracking-[0.3em] mb-4 font-medium"
-            style={{ color: GOLD }}
-          >
-            Kurumsal Teklif
-          </p>
-          <h1
-            className={`text-4xl sm:text-5xl md:text-6xl font-bold text-white tracking-tight mb-6 ${playfair.className}`}
-          >
-            Markanızın İmzasını Taşıyan Ambalajlar
-          </h1>
-          <p className="text-lg sm:text-xl text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Toptan alımlarda özel iskonto, ücretsiz tasarım desteği ve firmanıza özel üretim
-            çözümleri.
-          </p>
-          <button
-            type="button"
-            onClick={scrollToForm}
-            className="inline-flex items-center gap-2 px-8 py-4 rounded-lg font-semibold text-white transition-all hover:opacity-95 hover:scale-[1.02]"
-            style={{ backgroundColor: GOLD }}
-          >
-            <Sparkles className="h-5 w-5" />
-            Hemen Teklif Al
-          </button>
-        </div>
-      </section>
 
-      {/* Nasıl Çalışır — üreticiler yarışıyor konsepti */}
-      <section className="py-16 px-4 bg-slate-50/80 border-b border-slate-200">
-        <div className="max-w-5xl mx-auto">
-          <h2
-            className={`text-2xl sm:text-3xl font-bold text-center mb-12 ${playfair.className}`}
-            style={{ color: MIDNIGHT }}
-          >
-            Nasıl Çalışır?
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              {
-                step: 1,
-                icon: FileText,
-                title: 'Talebini Oluştur',
-                desc: 'İhtiyacın olan ürünü, özellikleri ve logonuzu sisteme yükleyin. Talebiniz anında işleme alınsın.',
-              },
-              {
-                step: 2,
-                icon: Users,
-                title: 'Üretici Ağı Devreye Girsin',
-                desc: "Sistemimizdeki 100+ onaylı üretici talebinizi görüntüler ve size en iyi fiyatı vermek için rekabet eder.",
-              },
-              {
-                step: 3,
-                icon: CheckCircle,
-                title: 'En İyi Fiyatla Anla',
-                desc: 'Matbaagross güvencesiyle filtrelenen en avantajlı teklifi panelinizden onaylayın, üretim hemen başlasın.',
-              },
-            ].map(({ step, icon: Icon, title, desc }) => (
-              <div key={step} className="text-center">
-                <div
-                  className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center text-white"
-                  style={{ backgroundColor: MIDNIGHT }}
-                >
-                  <Icon className="h-7 w-7" />
-                </div>
-                <p className="text-sm font-semibold mb-1" style={{ color: GOLD }}>
-                  Adım {step}
-                </p>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
-                <p className="text-slate-600 text-sm leading-relaxed">{desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Aksiyon alanı: Başlık hero + Form veya Giriş kilidi */}
-      <section ref={formRef} className="py-16 px-4">
-        <div className="max-w-4xl mx-auto">
-          {/* Centered Hero: Güven rozeti + Ana başlık + Alt açıklama */}
-          <div className="relative text-center mb-10 rounded-2xl py-10 px-4 bg-gradient-to-b from-amber-50/50 via-white to-white">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-500/50 bg-amber-50/80 mb-6">
-              <Factory className="h-3.5 w-3.5 text-amber-600" strokeWidth={2} />
-              <span className="text-[10px] sm:text-xs font-semibold tracking-widest text-amber-700 uppercase">
-                100+ ONAYLI ÜRETİCİ GÜCÜ
-              </span>
+      <section className="px-4 pt-10 pb-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div>
+              <h1 className={`text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 ${playfair.className}`}>Matbaagross Premium</h1>
+              <p className="text-sm text-slate-600 mt-1">Kurumsal üretim talepleri için VIP teklif deneyimi</p>
             </div>
-            <h1 className={`text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 mb-4 ${playfair.className}`}>
-              Markanıza Değer Katan, Size Özel Üretim Çözümleri
-            </h1>
-            <p className="text-slate-600 text-sm sm:text-base leading-relaxed max-w-2xl mx-auto">
-              Sizin için 100&apos;den fazla onaylı üreticiyi bir araya getirdik. Taleplerinizi uzman ekibimizle{' '}
-              <span className="font-semibold text-amber-600">analiz</span> ediyor,{' '}
-              <span className="font-semibold text-slate-800">Matbaagross Güvencesi</span>yle markanıza{' '}
-              <span className="font-semibold text-amber-600">en uygun teklifi</span> tek bir noktadan sunuyoruz. Fiyat araştırma zahmetine son.
-            </p>
+            <button
+              type="button"
+              onClick={scrollToForm}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FF6000] px-5 py-3 text-white font-semibold hover:bg-[#e55a00] transition-colors"
+            >
+              <Sparkles className="h-5 w-5" />
+              Talep Oluştur
+            </button>
           </div>
+        </div>
+      </section>
 
+      <section ref={formRef} className="px-4 pb-16">
+        <div className="max-w-6xl mx-auto">
           {!isAuthenticated ? (
-            /* Giriş yapmamış: blur + kilit CTA kartı */
-            <div className="relative rounded-2xl border border-slate-200 bg-white/80 backdrop-blur-sm shadow-lg overflow-hidden">
-              <div className="absolute inset-0 bg-slate-100/60 backdrop-blur-[2px]" aria-hidden="true" />
-              <div className="relative p-8 sm:p-10 text-center">
-                <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center bg-amber-100 text-amber-600">
-                  <Lock className="h-7 w-7 text-amber-600" />
-                </div>
-                <h3 className={`text-xl font-bold text-slate-900 mb-2 ${playfair.className}`}>
-                  Giriş Gerekli
-                </h3>
-                <p className="text-slate-600 text-sm leading-relaxed max-w-md mx-auto mb-6">
-                  Üreticilerden gelen teklifleri görmek ve size özel fiyatlarla sipariş vermek için giriş yapın.
-                </p>
-                <Link
-                  href="/giris"
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white transition-all hover:opacity-95"
-                  style={{ backgroundColor: MIDNIGHT }}
-                >
-                  Giriş Yap veya Kayıt Ol
-                </Link>
-                <p className="text-xs text-slate-500 mt-4">
-                  Hesabınız yoksa <Link href="/kayit-ol" className="text-amber-600 font-medium hover:underline">kayıt olun</Link>.
-                </p>
-              </div>
+            <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+              <p className="text-sm text-amber-900">
+                Misafir olarak teklif talebi oluşturuyorsunuz. Taleplerinizi daha sonra takip edebilmek için{' '}
+                <Link href="/giris" className="font-semibold underline underline-offset-2">giriş yapabilirsiniz</Link>.
+              </p>
             </div>
           ) : (
-            <>
-          {/* Profil özeti — giriş yapmış kullanıcı */}
-          <div className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-            <p className="text-sm text-slate-700">
-              Hesabınızla talep oluşturuyorsunuz: <span className="font-semibold text-slate-900">{displayName}</span>
-              {companyName ? (
-                <> <span className="text-slate-400">|</span> <span className="font-medium text-slate-800">{companyName}</span></>
-              ) : null}
-            </p>
-            <Link href="/hesabim" className="text-sm font-medium text-amber-600 hover:text-amber-700 hover:underline">
-              Bilgileri Güncelle
-            </Link>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-base font-semibold text-slate-900 mb-2">Ürün İsmi / Başlığı</label>
-                <input
-                  required
-                  value={form.productTitle}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setForm((f) => ({ ...f, productTitle: e.target.value }))
-                  }
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4af37]/50 focus:border-[#d4af37] text-slate-900 placeholder:text-slate-400"
-                  placeholder="Örn: Lüks Parfüm Kutusu"
-                />
-              </div>
-
-              <div>
-                <label className="block text-base font-semibold text-slate-900 mb-2">Adet</label>
-                <input
-                  required
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  value={form.quantity}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setForm((f) => ({ ...f, quantity: e.target.value }))
-                  }
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4af37]/50 focus:border-[#d4af37] text-slate-900 placeholder:text-slate-400"
-                  placeholder="Örn: 1000"
-                />
-              </div>
+            <div className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+              <p className="text-sm text-slate-700">
+                Hesabınızla talep oluşturuyorsunuz: <span className="font-semibold text-slate-900">{displayName}</span>
+                {companyName ? (
+                  <> <span className="text-slate-400">|</span> <span className="font-medium text-slate-800">{companyName}</span></>
+                ) : null}
+              </p>
+              <Link href="/hesabim" className="text-sm font-medium text-amber-600 hover:text-amber-700 hover:underline">
+                Bilgileri Güncelle
+              </Link>
             </div>
-
-            {/* İhtiyacınızı kısaca yazın */}
-            <div>
-              <label className="block text-base font-semibold text-slate-900 mb-2">İhtiyacınızı Kısaca Yazın</label>
-              <textarea
-                required
-                value={form.requestSummary}
-                onChange={(e) => setForm((f) => ({ ...f, requestSummary: e.target.value }))}
-                rows={3}
-                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4af37]/50 focus:border-[#d4af37] text-slate-900 placeholder:text-slate-400"
-                placeholder="Örn: 10.000 adet logolu pizza kutusu veya 5.000 adet 7oz karton bardak..."
-              />
-            </div>
-
-            {/* Ürün detayları ve teknik özellikler */}
-            <div>
-              <label className="block text-base font-semibold text-slate-900 mb-2">Ürün Detayları ve Varsa Teknik Özellikler</label>
-              <textarea
-                value={form.technicalDetails}
-                onChange={(e) => setForm((f) => ({ ...f, technicalDetails: e.target.value }))}
-                rows={4}
-                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4af37]/50 focus:border-[#d4af37] text-slate-900 placeholder:text-slate-400"
-                placeholder="Ebat, Kağıt Tipi, Selefon vb. detayları yazınız"
-              />
-
-              {/* Dosya yükleme */}
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Ürün Fotoğrafı veya Logo Yükle</label>
-                <div
-                  onDrop={handleDrop}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
-                    dragActive ? 'border-amber-400 bg-amber-50/30' : 'border-slate-200 bg-slate-50/50'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    accept="image/*,.pdf,.ai,.eps,.psd"
-                    onChange={handleFileInput}
-                    className="hidden"
-                    id="premium-file-upload"
-                  />
-                  <label htmlFor="premium-file-upload" className="cursor-pointer block">
-                    <Upload className="h-8 w-8 mx-auto text-slate-400 mb-2" />
-                    {uploadedFile ? (
-                      <p className="text-sm font-medium text-slate-700">{uploadedFile.name}</p>
-                    ) : (
-                      <p className="text-sm text-slate-500">
-                        Dosyayı sürükleyin veya <span className="text-amber-600 font-medium">tıklayarak seçin</span>
-                      </p>
-                    )}
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Teknik detayı bilmiyorum / Numune — CTA kutuları */}
-            <div className="space-y-4">
-              <p className="text-sm font-medium text-slate-700">Teknik detayları bilmiyor musunuz?</p>
-
-              <label className="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-200 hover:border-amber-200 bg-white cursor-pointer transition-colors has-[:checked]:border-amber-400 has-[:checked]:bg-amber-50/30">
-                <input
-                  type="checkbox"
-                  checked={form.needExpertCall}
-                  onChange={(e) => setForm((f) => ({ ...f, needExpertCall: e.target.checked }))}
-                  className="mt-1 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                />
-                <div>
-                  <span className="font-semibold text-slate-900 flex items-center gap-2">
-                    <PhoneCall className="h-4 w-4 text-amber-600" />
-                    Teknik Detayları Bilmiyorum
-                  </span>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Sadece talebinizi oluşturun; Matbaagross uzman ekibi ürününüzü analiz etmek için sizinle iletişime geçsin.
-                  </p>
-                </div>
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full sm:w-auto px-10 py-4 rounded-xl font-bold text-white transition-all hover:opacity-95"
-              style={{ backgroundColor: MIDNIGHT }}
-            >
-              Talebi Gönder
-            </button>
-          </form>
-            </>
           )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-5 space-y-6">
+              {(selectedProductLoading || selectedProduct) && (
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden">
+                  <div className="px-6 py-5 border-b border-slate-100">
+                    <h3 className="text-sm font-semibold text-slate-900">Seçilen Ürün</h3>
+                  </div>
+                  <div className="p-6 flex items-center gap-4">
+                    <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 flex-shrink-0">
+                      {selectedProduct?.imageUrl ? (
+                        <Image
+                          src={selectedProduct.imageUrl}
+                          alt={selectedProduct.name}
+                          fill
+                          className="object-contain"
+                          sizes="64px"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">Ürün</div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">
+                        {selectedProductLoading ? 'Yükleniyor...' : selectedProduct?.name}
+                      </p>
+                      {productId && <p className="text-xs text-slate-500 truncate">ID: {productId}</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-gradient-to-br from-white to-slate-100 border border-slate-200 shadow-xl rounded-[2rem] p-8">
+                <p className="text-3xl font-extrabold bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 bg-clip-text text-transparent">Matbaagross Premium Güvencesi</p>
+                <div className="w-12 h-1 bg-orange-500 rounded-full my-4" />
+                <p className="text-sm text-slate-700 leading-relaxed">
+                  Matbaagross, kurumsal üretim taleplerinizi doğrulanmış üreticilerle buluşturur. Sağdaki hızlı form ile saniyeler içinde talep bırakın.
+                </p>
+
+                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { icon: FileText, title: 'Talebinizi Oluşturun', desc: 'İhtiyacınızı sisteme girin' },
+                    { icon: Users, title: 'Teklifleri Karşılaştırın', desc: '100+ üreticiden fiyat' },
+                    { icon: ShieldCheck, title: 'Güvenli Ödeme', desc: 'Matbaagross güvencesi' },
+                    { icon: Truck, title: 'Üretim & Teslimat', desc: 'Kapınıza kadar teslim' },
+                  ].map(({ icon: Icon, title, desc }) => (
+                    <div
+                      key={title}
+                      className="rounded-2xl bg-white/70 border border-slate-200 p-4 transition-all duration-200 hover:bg-white hover:shadow-md"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="bg-orange-50 text-orange-500 p-3 rounded-2xl flex items-center justify-center">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-800">{title}</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">{desc}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-7">
+              <div className="bg-white rounded-[2.5rem] p-8 sm:p-10 shadow-[0_15px_50px_rgba(0,0,0,0.06)] border border-gray-100">
+                <div className="pb-6 border-b border-slate-100">
+                  <h2 className="text-3xl font-bold tracking-tight text-slate-900">Hızlı Teklif Formu</h2>
+                  <p className="text-sm text-slate-600 mt-2">Tek ekranda doldurun, hemen teklif isteyin</p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="pt-6 space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-900">Ürün İsmi / Başlığı</label>
+                      <input
+                        required
+                        value={form.productTitle}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setForm((f) => ({ ...f, productTitle: e.target.value }))
+                        }
+                        readOnly={Boolean(productId && selectedProduct?.name)}
+                        className="mt-2 w-full bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 rounded-xl px-5 py-4 transition-all duration-200"
+                        placeholder="Örn: Lüks Parfüm Kutusu"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-900">Adet</label>
+                      <input
+                        required
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        value={form.quantity}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setForm((f) => ({ ...f, quantity: e.target.value }))
+                        }
+                        className="mt-2 w-full bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 rounded-xl px-5 py-4 transition-all duration-200"
+                        placeholder="Örn: 1000"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">İhtiyacınızı Kısaca Yazın</label>
+                    <textarea
+                      required
+                      value={form.requestSummary}
+                      onChange={(e) => setForm((f) => ({ ...f, requestSummary: e.target.value }))}
+                      rows={3}
+                      className="mt-2 w-full bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 rounded-xl px-5 py-4 transition-all duration-200"
+                      placeholder="Örn: 10.000 adet logolu pizza kutusu veya 5.000 adet 7oz karton bardak..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">Teknik Detaylar</label>
+                    <textarea
+                      value={form.technicalDetails}
+                      onChange={(e) => setForm((f) => ({ ...f, technicalDetails: e.target.value }))}
+                      rows={2}
+                      className="mt-2 w-full bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 rounded-xl px-5 py-4 transition-all duration-200"
+                      placeholder="Ebat, kağıt tipi, selefon vb. (opsiyonel)"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">Dosya/Logo Yükleme</label>
+                    <div
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      className={`mt-2 rounded-2xl border-2 border-dashed p-6 transition-colors ${
+                        dragActive ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        accept="image/*,.pdf,.ai,.eps,.psd"
+                        onChange={handleFileInput}
+                        className="hidden"
+                        id="premium-file-upload"
+                      />
+                      <label htmlFor="premium-file-upload" className="cursor-pointer block">
+                        <div className="flex items-center gap-3">
+                          <div className="h-12 w-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                            <Upload className="h-5 w-5 text-slate-700" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 truncate">
+                              {uploadedFile ? uploadedFile.name : 'Dosyayı sürükleyin veya tıklayın'}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-0.5">PDF/AI/EPS/PSD veya görsel dosyaları</p>
+                          </div>
+                        </div>
+                      </label>
+
+                      {uploadedFile ? (
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline"
+                            onClick={() => {
+                              setUploadedFile(null);
+                              setUploadedPreview(null);
+                            }}
+                          >
+                            Dosyayı kaldır
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-lg rounded-xl py-5 shadow-lg shadow-orange-500/30 transform transition hover:-translate-y-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? 'Gönderiliyor...' : 'Hemen Teklif İste'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -532,8 +571,7 @@ export default function PremiumPage() {
       <section className="py-16 px-4">
         <div className="max-w-5xl mx-auto">
           <h2
-            className={`text-2xl font-bold text-center mb-10 ${playfair.className}`}
-            style={{ color: MIDNIGHT }}
+            className={`text-3xl font-extrabold tracking-tight text-center mb-10 text-slate-900 ${playfair.className}`}
           >
             Neden Matbaagross Premium?
           </h2>
@@ -557,20 +595,27 @@ export default function PremiumPage() {
             ].map(({ icon: Icon, title, desc }) => (
               <div
                 key={title}
-                className="text-center p-6 rounded-2xl border border-slate-200 bg-white shadow-sm"
+                className="text-center p-8 rounded-[2rem] border border-slate-200 bg-white shadow-sm"
               >
                 <div
-                  className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
-                  style={{ backgroundColor: GOLD_LIGHT, color: MIDNIGHT }}
+                  className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center bg-orange-50 border border-orange-100"
                 >
-                  <Icon className="h-6 w-6" />
+                  <Icon className="h-6 w-6 text-orange-500" />
                 </div>
-                <h3 className="font-bold text-slate-900 mb-2">{title}</h3>
-                <p className="text-slate-600 text-sm">{desc}</p>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
+                <p className="text-slate-600 text-sm leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>    </div>
+  );
+}
+
+export default function PremiumPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white" />}>
+      <PremiumPageInner />
+    </Suspense>
   );
 }

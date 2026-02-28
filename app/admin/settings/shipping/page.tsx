@@ -10,7 +10,7 @@ export default function AdminShippingPage() {
   useEffect(() => {
     const run = async () => {
       try {
-        const res = await fetch('/api/store-settings');
+        const res = await fetch('/api/store-settings', { cache: 'no-store' });
         if (!res.ok) return;
         const data = (await res.json()) as { shippingFee?: number; freeShippingThreshold?: number };
         if (typeof data.shippingFee === 'number') setShippingFee(String(data.shippingFee));

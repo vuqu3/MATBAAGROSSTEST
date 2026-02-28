@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ShoppingCart, Check, Truck, RotateCcw, ShieldCheck, Crown } from 'lucide-react';
 
 interface ProductActionCardProps {
+  productId: string;
   /** Gösterilecek satış fiyatı (birim, seçenekler dahil) */
   unitPrice: number;
   /** Toplam fiyat (unitPrice * quantity) */
@@ -18,9 +19,11 @@ interface ProductActionCardProps {
   minOrderQuantity?: number | null;
   /** Sepete ekleme için gerekli seçimler yapıldı mı (örn. varyant zorunlu) */
   canAddToCart?: boolean;
+  disabledText?: string;
 }
 
 export default function ProductActionCard({
+  productId,
   unitPrice,
   totalPrice,
   dbUnitPrice,
@@ -31,6 +34,7 @@ export default function ProductActionCard({
   loading = false,
   minOrderQuantity,
   canAddToCart = true,
+  disabledText,
 }: ProductActionCardProps) {
   const minQty = minOrderQuantity ?? 1;
 
@@ -82,7 +86,11 @@ export default function ProductActionCard({
           type="button"
           onClick={onAddToCart}
           disabled={loading || !canAddToCart}
-          className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md hover:shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-all disabled:cursor-not-allowed ${
+            !canAddToCart
+              ? 'bg-gray-300 text-gray-600'
+              : 'bg-[#f97316] hover:bg-[#ea580c] text-white hover:shadow-lg'
+          }`}
         >
           {loading ? (
             'Yükleniyor...'
@@ -90,6 +98,11 @@ export default function ProductActionCard({
             <>
               <Check className="h-4 w-4" />
               Sepete Eklendi
+            </>
+          ) : !canAddToCart ? (
+            <>
+              <ShoppingCart className="h-4 w-4" />
+              {disabledText || 'Stokta Yok'}
             </>
           ) : (
             <>
@@ -118,7 +131,7 @@ export default function ProductActionCard({
 
       {/* 5. Premium teaser — ghost style, sepete ekle altında alternatif seçenek */}
       <Link
-        href="/premium"
+        href={`/premium?productId=${encodeURIComponent(productId)}`}
         className="mt-4 flex items-center gap-3 rounded-lg border border-dashed border-amber-400 bg-amber-50/50 p-3 transition-opacity hover:opacity-90"
       >
         <Crown className="h-4 w-4 flex-shrink-0 text-amber-500" />

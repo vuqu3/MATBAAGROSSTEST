@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Users, TrendingDown, ShieldCheck, X, Star } from 'lucide-react';
 import { Playfair_Display } from 'next/font/google';
+import Image from 'next/image';
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -95,12 +96,17 @@ export default function PremiumWelcomeModal({ open, onClose }: PremiumWelcomeMod
           {/* Marka bloğu: rozetin sağında, fiziksel olarak çakışmayacak şekilde pl + pt */}
           <header className="flex flex-col items-start justify-center mb-4 pr-10 pl-24 pt-8 sm:pl-28 sm:pt-10">
             <div
-              className="flex flex-row items-end gap-2"
+              className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-start gap-3"
               id="welcome-modal-title"
             >
-              <span className="text-2xl sm:text-3xl font-extrabold uppercase text-slate-900 tracking-tight">
-                Matbaagross
-              </span>
+              <Image
+                src="/logo.svg"
+                alt="Matbaagross Logo"
+                width={200}
+                height={60}
+                className="h-8 sm:h-10 w-auto object-contain"
+                priority
+              />
               <span className={`text-base sm:text-lg font-serif italic text-amber-600 pb-0.5 ${playfair.className}`}>
                 Premium
               </span>

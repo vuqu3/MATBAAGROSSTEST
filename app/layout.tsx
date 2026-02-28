@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "MatbaaGross - Türkiye'nin Online Matbaa Toptancısı",
   description: "Profesyonel matbaa ürünleri ve hizmetleri. Ofset baskı, dijital baskı, kutu & ambalaj, promosyon ürünleri ve daha fazlası.",
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export const viewport: Viewport = {

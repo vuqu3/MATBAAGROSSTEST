@@ -1,8 +1,10 @@
 import NextAuth from 'next-auth';
-import type { NextAuthOptions } from 'next-auth';
+import type { NextAuthConfig } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import GoogleProvider from 'next-auth/providers/google';
 import { prisma } from './prisma';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 // Prisma bağlantısını test et
 async function testDatabaseConnection() {
@@ -15,18 +17,22 @@ async function testDatabaseConnection() {
   }
 }
 
-const authOptions: NextAuthOptions = {
+const authOptions: NextAuthConfig = {
   secret: process.env.NEXTAUTH_SECRET,
   // Trust host için (development'ta gerekli olabilir)
   trustHost: true,
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    }),
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials: Record<string, string> | undefined) {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
@@ -47,10 +53,7 @@ const authOptions: NextAuthOptions = {
             return null;
           }
 
-          const isPasswordValid = await bcrypt.compare(
-            credentials.password,
-            user.password
-          );
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
 
           if (!isPasswordValid) {
             return null;
@@ -73,13 +76,45 @@ const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider !== 'google') return true;
+      const email = user?.email;
+      if (!email) return false;
+
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) return true;
+
+      const randomPassword = crypto.randomUUID();
+      const hashed = await bcrypt.hash(randomPassword, 10);
+
+      await prisma.user.create({
+        data: {
+          email,
+          password: hashed,
+          name: user?.name ?? null,
+        },
+      });
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role;
-        token.id = user.id;
-        token.userType = user.userType;
-        token.companyName = user.companyName;
-        token.phoneNumber = user.phoneNumber;
+        const u = user as any;
+        token.role = u.role;
+        token.id = u.id;
+        token.userType = u.userType;
+        token.companyName = u.companyName;
+        token.phoneNumber = u.phoneNumber;
+      }
+
+      if (token?.email && (!token.id || !token.role)) {
+        const dbUser = await prisma.user.findUnique({ where: { email: String(token.email) } });
+        if (dbUser) {
+          token.id = dbUser.id;
+          token.role = dbUser.role;
+          token.userType = dbUser.userType;
+          token.companyName = dbUser.companyName;
+          token.phoneNumber = dbUser.phoneNumber;
+        }
       }
       return token;
     },

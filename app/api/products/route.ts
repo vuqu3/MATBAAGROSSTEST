@@ -14,6 +14,10 @@ export async function GET(request: Request) {
     const takeParam = searchParams.get('take');
     const ids = idsParam ? idsParam.split(',').map((id) => id.trim()).filter(Boolean) : [];
 
+    const inStockWhere = {
+      OR: [{ stock: { gt: 0 } }, { stockQuantity: { gt: 0 } }],
+    } as const;
+
     console.log('PRODUCTS_GET_REQUEST:', { idsParam, limitParam, idsLength: ids.length });
 
     if (ids.length > 0) {
@@ -22,6 +26,7 @@ export async function GET(request: Request) {
           id: { in: ids },
           isPublished: true,
           isActive: true,
+          ...inStockWhere,
           imageUrl: { not: null, not: '' },
           NOT: [
             { imageUrl: { contains: 'placeholder' } },
@@ -98,6 +103,7 @@ export async function GET(request: Request) {
       where: {
         isPublished: true,
         isActive: true,
+        ...(filterForRealImages ? inStockWhere : {}),
         ...(filterForRealImages
           ? {
               imageUrl: { not: null, not: '' },
