@@ -1,21 +1,45 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Uygulama her zaman SQLite (dev.db) kullanır; PostgreSQL adresi verilse bile file: kullanılır
-const envUrl = process.env.DATABASE_URL;
-const url =
-  typeof envUrl === 'string' && envUrl.trim().startsWith('file:')
-    ? envUrl.trim()
-    : 'file:./dev.db';
-const adapter = new PrismaBetterSqlite3({ url });
+function createPool() {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) throw new Error('DATABASE_URL is required');
+  const url = new URL(raw);
+  return new Pool({
+    host: url.hostname,
+    port: url.port ? parseInt(url.port, 10) : 5432,
+    database: url.pathname.replace(/^\//, ''),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+  });
+}
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  adapter,
-  log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-});
+const pool = createPool();
+const adapter = new PrismaPg(pool);
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    adapter,
+    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') {
+  // In dev, the global PrismaClient instance can survive hot reloads.
+  // If the Prisma Client was regenerated (schema change), the cached instance
+  // may not include new model delegates. Recreate it once if we detect that.
+  const cached = globalForPrisma.prisma;
+  if (cached && !(cached as any).referenceProduct) {
+    globalForPrisma.prisma = new PrismaClient({
+      adapter,
+      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+    });
+  } else {
+    globalForPrisma.prisma = prisma;
+  }
+}

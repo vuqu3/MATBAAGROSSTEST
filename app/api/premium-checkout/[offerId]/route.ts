@@ -2,9 +2,86 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PremiumQuoteOfferStatus, PremiumQuoteRequestStatus } from '@prisma/client';
-import { Resend } from 'resend';
+import crypto from 'crypto';
 
-const COMMISSION_RATE = 0.1;
+const COMMISSION_RATE = 0;
+const PAYTR_RATE = 0.032;
+
+function toKurus(amountTl: number) {
+  return Math.round((Number.isFinite(amountTl) ? amountTl : 0) * 100);
+}
+
+function base64Encode(value: string) {
+  return Buffer.from(value, 'utf8').toString('base64');
+}
+
+function isValidIp(ip: string) {
+  const v = String(ip || '').trim();
+  if (!v) return false;
+  const ipv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(v);
+  if (ipv4) {
+    const parts = v.split('.').map((x) => Number.parseInt(x, 10));
+    if (parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return false;
+    return true;
+  }
+  const ipv6 = /^[0-9a-f:]+$/i.test(v) && v.includes(':');
+  return ipv6;
+}
+
+function isPrivateIp(ip: string) {
+  const v = String(ip || '').trim();
+  if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(v)) return false;
+  const [a, b] = v.split('.').map((x) => Number.parseInt(x, 10));
+  if (a === 10) return true;
+  if (a === 127) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  return false;
+}
+
+function parseForwardedFor(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+    .map((v) => v.replace(/^\[|\]$/g, ''));
+}
+
+function getClientIp(req: Request): string {
+  const candidates = [
+    ...parseForwardedFor(req.headers.get('x-forwarded-for')),
+    ...parseForwardedFor(req.headers.get('http_x_forwarded_for')),
+    req.headers.get('cf-connecting-ip'),
+    req.headers.get('x-client-ip'),
+    req.headers.get('http_client_ip'),
+    req.headers.get('x-real-ip'),
+  ].filter((v): v is string => Boolean(v));
+
+  const firstPublic = candidates.find((ip) => isValidIp(ip) && !isPrivateIp(ip));
+  if (firstPublic) return firstPublic;
+
+  const firstValid = candidates.find((ip) => isValidIp(ip));
+  if (firstValid) return firstValid;
+
+  return '127.0.0.1';
+}
+
+function ensureHttpsUrl(url: string) {
+  const u = String(url || '').trim();
+  if (!u) return u;
+  if (u.startsWith('https://')) return u;
+  if (u.startsWith('http://')) return `https://${u.slice('http://'.length)}`;
+  return u;
+}
+
+function createPaytrToken(payload: string, merchantKey: string): string {
+  return crypto.createHmac('sha256', merchantKey).update(payload).digest('base64');
+}
+
+function sanitizeOidPart(v: string) {
+  return String(v || '').replace(/[^a-zA-Z0-9]/g, '');
+}
 
 export async function GET(_: Request, ctx: { params: Promise<{ offerId: string }> }) {
   try {
@@ -54,6 +131,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ offerId: string }
     }
 
     const total = Number(offer.totalPrice ?? offer.price);
+    const commissionApplied = Math.round(total * (1 + COMMISSION_RATE) * 100) / 100;
+    const payable = Math.round((commissionApplied / (1 - PAYTR_RATE)) * 100) / 100;
     const net = Math.round(total * (1 - COMMISSION_RATE) * 100) / 100;
 
     return NextResponse.json({
@@ -61,6 +140,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ offerId: string }
       totals: {
         total,
         commissionRate: COMMISSION_RATE,
+        payable,
         net,
       },
     });
@@ -77,9 +157,20 @@ export async function POST(_: Request, ctx: { params: Promise<{ offerId: string 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const merchantId = process.env.PAYTR_MERCHANT_ID;
+    const merchantKey = process.env.PAYTR_MERCHANT_KEY;
+    const merchantSalt = process.env.PAYTR_MERCHANT_SALT;
+
+    if (!merchantId || !merchantKey || !merchantSalt) {
+      return NextResponse.json(
+        { error: 'PayTR env değişkenleri eksik (PAYTR_MERCHANT_ID/KEY/SALT).' },
+        { status: 500 }
+      );
+    }
+
     const { offerId } = await ctx.params;
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const tokenResp = await prisma.$transaction(async (tx) => {
       const offer = await tx.premiumQuoteOffer.findUnique({
         where: { id: offerId },
         select: {
@@ -89,7 +180,7 @@ export async function POST(_: Request, ctx: { params: Promise<{ offerId: string 
           price: true,
           totalPrice: true,
           requestId: true,
-          request: { select: { id: true, userId: true } },
+          request: { select: { id: true, userId: true, requestNo: true, productName: true, status: true } },
         },
       });
 
@@ -97,8 +188,16 @@ export async function POST(_: Request, ctx: { params: Promise<{ offerId: string 
         return { error: 'Not found', status: 404 as const };
       }
 
-      if (offer.status !== PremiumQuoteOfferStatus.PENDING) {
+      const allowedStatuses: PremiumQuoteOfferStatus[] = [
+        PremiumQuoteOfferStatus.ACCEPTED,
+        PremiumQuoteOfferStatus.PENDING,
+      ];
+      if (!allowedStatuses.includes(offer.status)) {
         return { error: 'Teklif ödeme alınabilir durumda değil', status: 400 as const };
+      }
+
+      if (offer.request.status === PremiumQuoteRequestStatus.PROCESSING || offer.request.status === PremiumQuoteRequestStatus.COMPLETED) {
+        return { error: 'Bu talep artık ödeme alınabilir durumda değil', status: 400 as const };
       }
 
       const total = Number(offer.totalPrice ?? offer.price);
@@ -106,114 +205,110 @@ export async function POST(_: Request, ctx: { params: Promise<{ offerId: string 
         return { error: 'Teklif tutarı geçersiz', status: 400 as const };
       }
 
-      const offerUpdated = await tx.premiumQuoteOffer.update({
-        where: { id: offerId },
-        data: { status: PremiumQuoteOfferStatus.PAID },
-        select: { id: true, status: true, requestId: true, vendorId: true },
+      const commissionApplied = Math.round(total * (1 + COMMISSION_RATE) * 100) / 100;
+      const payable = Math.round((commissionApplied / (1 - PAYTR_RATE)) * 100) / 100;
+
+      const userDb = await tx.user.findUnique({
+        where: { id: session.user.id },
+        select: { email: true, name: true, phoneNumber: true },
       });
 
-      await tx.premiumQuoteRequest.update({
-        where: { id: offerUpdated.requestId },
-        data: { status: PremiumQuoteRequestStatus.PROCESSING },
-        select: { id: true },
+      const email = userDb?.email || session.user.email || '';
+      if (!email) {
+        return { error: 'E-posta bilgisi eksik', status: 400 as const };
+      }
+
+      const userName = userDb?.name || email.split('@')[0] || 'Müşteri';
+      const userPhone = userDb?.phoneNumber || '05555555555';
+      const userAddress = 'Türkiye';
+
+      const userBasket = base64Encode(
+        JSON.stringify([[String(offer.request.productName || 'Premium Üretim'), String(payable), 1]])
+      );
+
+      const userIp = getClientIp(_);
+      const merchantOid = `PRM${sanitizeOidPart(offer.id)}`;
+      const paymentAmount = toKurus(payable);
+
+      const tokenPayload =
+        `${merchantId}${userIp}${merchantOid}${email}${paymentAmount}${userBasket}`
+        + `${0}${0}TL${0}${merchantSalt}`;
+      const paytrToken = createPaytrToken(tokenPayload, merchantKey);
+
+      const baseUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.NEXTAUTH_URL ||
+        'https://www.matbaagross.com';
+
+      const httpsBaseUrl = ensureHttpsUrl(baseUrl);
+      const okUrl = `${httpsBaseUrl}/hesabim/premium-islerim?success=${encodeURIComponent(offer.id)}&requestNo=${encodeURIComponent(offer.request.requestNo)}`;
+      const failUrl = `${httpsBaseUrl}/hesabim/premium-islerim?fail=1&offerId=${encodeURIComponent(offer.id)}&requestNo=${encodeURIComponent(offer.request.requestNo)}`;
+
+      const paytrReq = new URLSearchParams();
+      paytrReq.set('merchant_id', String(merchantId));
+      paytrReq.set('user_ip', userIp);
+      paytrReq.set('merchant_oid', merchantOid);
+      paytrReq.set('email', email);
+      paytrReq.set('payment_amount', String(paymentAmount));
+      paytrReq.set('user_basket', userBasket);
+      paytrReq.set('no_installment', '0');
+      paytrReq.set('max_installment', '0');
+      paytrReq.set('currency', 'TL');
+      paytrReq.set('test_mode', '0');
+      paytrReq.set('paytr_token', paytrToken);
+      paytrReq.set('debug_on', '0');
+      paytrReq.set('user_name', userName);
+      paytrReq.set('user_address', userAddress);
+      paytrReq.set('user_phone', userPhone);
+      paytrReq.set('merchant_ok_url', okUrl);
+      paytrReq.set('merchant_fail_url', failUrl);
+      paytrReq.set('timeout_limit', '30');
+      paytrReq.set('lang', 'tr');
+
+      const resp = await fetch('https://www.paytr.com/odeme/api/get-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: paytrReq,
+        cache: 'no-store',
       });
 
-      const net = Math.round(total * (1 - COMMISSION_RATE) * 100) / 100;
+      const rawText = await resp.text().catch(() => '');
+      const data = (() => {
+        try {
+          return JSON.parse(rawText) as any;
+        } catch {
+          return null;
+        }
+      })();
 
-      await tx.vendor.update({
-        where: { id: offerUpdated.vendorId },
+      if (!resp.ok || !data || data.status !== 'success' || !data.token) {
+        console.error('PAYTR_PREMIUM_GET_TOKEN_FAILED', {
+          httpStatus: resp.status,
+          reason: data?.reason,
+          merchant_oid: merchantOid,
+          user_ip: userIp,
+          raw: rawText?.slice(0, 1000),
+        });
+        return { error: data?.reason || 'PayTR token alınamadı', status: 502 as const };
+      }
+
+      return {
         data: {
-          pendingBalance: {
-            increment: net,
-          },
+          token: String(data.token),
+          merchantOid,
+          iframeUrl: `https://www.paytr.com/odeme/guvenli/${encodeURIComponent(String(data.token))}`,
+          payable,
+          requestNo: offer.request.requestNo,
         },
-        select: { id: true },
-      });
-
-      return { data: offerUpdated };
+      };
     });
 
-    if ('error' in updated) {
-      return NextResponse.json({ error: updated.error }, { status: updated.status });
+    if ('error' in tokenResp) {
+      return NextResponse.json({ error: tokenResp.error }, { status: tokenResp.status });
     }
 
-    // Send email notification after successful payment
-    if (process.env.RESEND_API_KEY) {
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        
-        // Fetch full details for email
-        const fullOffer = await prisma.premiumQuoteOffer.findUnique({
-          where: { id: offerId },
-          include: {
-            request: {
-              include: {
-                user: {
-                  select: { name: true, email: true }
-                }
-              }
-            },
-            vendor: {
-              select: { name: true }
-            }
-          }
-        });
-
-        if (fullOffer?.request?.user?.email) {
-          const emailHtml = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #FF6000; margin: 0;">Matbaagross Premium</h1>
-                <p style="color: #666; margin: 5px 0;">Siparişiniz Alındı!</p>
-              </div>
-              
-              <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h2 style="color: #333; margin-top: 0;">Sipariş Detayları</h2>
-                <p><strong>Talep No:</strong> ${fullOffer.request.requestNo}</p>
-                <p><strong>Ürün:</strong> ${fullOffer.request.productName}</p>
-                <p><strong>Adet:</strong> ${Number(fullOffer.request.quantity).toLocaleString('tr-TR')}</p>
-                <p><strong>Toplam Tutar:</strong> ${Number(fullOffer.totalPrice ?? fullOffer.price).toLocaleString('tr-TR')} TL</p>
-                <p><strong>Üretici:</strong> ${fullOffer.vendor.name}</p>
-                <p><strong>Teslimat Süresi:</strong> ${fullOffer.deliveryTime}</p>
-              </div>
-              
-              <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
-                <p style="margin: 0; color: #856404;">
-                  <strong>Önemli Bilgi:</strong> Matbaagross Premium siparişiniz alınmıştır ve üreticiye bilgi geçilmiştir. 
-                  Siparişleriniz Matbaagross güvencesi altında üretime başlayacaktır.
-                </p>
-              </div>
-              
-              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                <p style="color: #666; font-size: 14px; margin: 0;">
-                  Bu e-posta Matbaagross Premium sistemi tarafından otomatik olarak gönderilmiştir.
-                </p>
-              </div>
-            </div>
-          `;
-
-          const adminEmail = process.env.ADMIN_EMAIL || 'volkanongunn@gmail.com';
-          
-          const { data, error } = await resend.emails.send({
-            from: 'MatbaaGross Premium <noreply@matbaagross.com>',
-            to: fullOffer.request.user.email,
-            bcc: [adminEmail],
-            subject: `Premium Siparişiniz Alındı! - ${fullOffer.request.requestNo}`,
-            html: emailHtml,
-          });
-
-          if (error) {
-            console.error('❌ PREMIUM PAYMENT EMAIL ERROR:', JSON.stringify(error));
-          } else {
-            console.log('✅ PREMIUM PAYMENT EMAIL SENT:', data);
-          }
-        }
-      } catch (emailError) {
-        console.error('❌ PREMIUM PAYMENT EMAIL ERROR:', emailError);
-      }
-    }
-
-    return NextResponse.json(updated.data);
+    return NextResponse.json(tokenResp.data);
   } catch (error) {
     console.error('PREMIUM_CHECKOUT_POST_ERROR:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

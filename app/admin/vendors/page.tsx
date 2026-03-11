@@ -9,7 +9,16 @@ export default async function AdminVendorsPage() {
 
   const vendors = await prisma.vendor.findMany({
     orderBy: { name: 'asc' },
-    include: { owner: { select: { email: true, name: true } } },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      balance: true,
+      isBlocked: true,
+      subscriptionStatus: true,
+      subscriptionEndsAt: true,
+      owner: { select: { email: true, name: true } },
+    } as any,
   });
 
   return <VendorsClient initialVendors={vendors} />;

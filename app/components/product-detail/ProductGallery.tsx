@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Image from 'next/image';
-import { Truck, Zap, Factory, Package } from 'lucide-react';
+import { Truck, Zap, Factory, Package, ShieldCheck, BarChart3 } from 'lucide-react';
 
 export type ProductGalleryImage = string;
 
@@ -15,6 +15,12 @@ const BADGES: { id: BadgeId; label: string; icon: React.ElementType; bg: string;
   { id: 'wholesale', label: 'Toptan Fırsatı', icon: Package, bg: 'bg-blue-100', text: 'text-blue-800' },
 ];
 
+const B2B_BADGES: { label: string; icon: React.ElementType; bg: string; text: string }[] = [
+  { label: 'Onaylı Üretici Ağı', icon: ShieldCheck, bg: 'bg-[#0b1f3a]', text: 'text-white' },
+  { label: 'Rekabetçi Teklif Havuzu', icon: BarChart3, bg: 'bg-[#b28a00]', text: 'text-white' },
+  { label: 'Garantili Üretim Süreci', icon: Zap, bg: 'bg-[#0f3d2e]', text: 'text-white' },
+];
+
 interface ProductGalleryProps {
   productName: string;
   imageUrl: string | null;
@@ -25,6 +31,7 @@ interface ProductGalleryProps {
   minOrderQuantity?: number | null;
   productionDays?: number | null;
   productType?: string;
+  isBrandQuoteCategory?: boolean;
 }
 
 function getDefaultBadges(props: {
@@ -47,6 +54,7 @@ export default function ProductGallery({
   minOrderQuantity,
   productionDays,
   productType,
+  isBrandQuoteCategory,
 }: ProductGalleryProps) {
   const [mainIndex, setMainIndex] = useState(0);
 
@@ -59,9 +67,10 @@ export default function ProductGallery({
   }, [imageUrl, images]);
 
   const activeBadges = useMemo(() => {
+    if (isBrandQuoteCategory) return [];
     const ids = badgeIds ?? getDefaultBadges({ minOrderQuantity, productionDays, productType });
     return BADGES.filter((b) => ids.includes(b.id));
-  }, [badgeIds, minOrderQuantity, productionDays, productType]);
+  }, [badgeIds, minOrderQuantity, productionDays, productType, isBrandQuoteCategory]);
 
   const mainSrc = imageList[mainIndex] || imageList[0] || '/placeholder-product.svg';
   const isPlaceholder = mainSrc.includes('placeholder') || mainSrc.endsWith('.svg');
@@ -71,18 +80,31 @@ export default function ProductGallery({
       <div className="relative rounded-xl border border-gray-200 overflow-hidden bg-gray-50 shadow-sm aspect-square max-h-[420px] flex items-center justify-center">
         {/* Rozetler - sol üst */}
         <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
-          {activeBadges.map((badge) => {
-            const Icon = badge.icon;
-            return (
-              <span
-                key={badge.id}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium shadow-sm ${badge.bg} ${badge.text}`}
-              >
-                <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                {badge.label}
-              </span>
-            );
-          })}
+          {isBrandQuoteCategory
+            ? B2B_BADGES.map((badge) => {
+                const Icon = badge.icon;
+                return (
+                  <span
+                    key={badge.label}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold shadow-sm ${badge.bg} ${badge.text}`}
+                  >
+                    <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                    {badge.label}
+                  </span>
+                );
+              })
+            : activeBadges.map((badge) => {
+                const Icon = badge.icon;
+                return (
+                  <span
+                    key={badge.id}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium shadow-sm ${badge.bg} ${badge.text}`}
+                  >
+                    <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                    {badge.label}
+                  </span>
+                );
+              })}
         </div>
 
         {isPlaceholder ? (

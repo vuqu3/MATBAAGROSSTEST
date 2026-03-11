@@ -76,6 +76,8 @@ function OnayPageInner() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [termsError, setTermsError] = useState(false);
   const [paytrToken, setPaytrToken] = useState<string | null>(null);
+  const [paytrError, setPaytrError] = useState<string | null>(null);
+  const [paytrOrderId, setPaytrOrderId] = useState<string | null>(null);
 
   // Fetch user addresses from database — only re-run when session changes, NOT on address selection
   useEffect(() => {
@@ -209,6 +211,7 @@ function OnayPageInner() {
 
     setLoading(true);
     setStep('processing');
+    setPaytrError(null);
 
     try {
       let resolvedAddressId = selectedAddressId;
@@ -296,11 +299,10 @@ function OnayPageInner() {
           console.warn('Revalidation failed, but order was created');
         });
 
-        setStep('done');
-
         const createdOrderId = String(responseData.id || '').trim();
         const isCardFlow = (isGuest ? 'CARD' : paymentMethod) === 'CARD';
         if (isCardFlow && createdOrderId) {
+          setPaytrOrderId(createdOrderId);
           const tokenRes = await fetch('/api/payment/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -308,16 +310,18 @@ function OnayPageInner() {
           });
           const tokenData = await tokenRes.json();
           if (!tokenRes.ok) {
-            throw new Error(tokenData?.error || 'PayTR token alınamadı');
+            throw new Error(tokenData?.error || 'Ödeme sistemi ile bağlantı kurulamadı veya bir hata oluştu');
           }
           const token = String(tokenData?.token || '').trim();
           if (!token) {
-            throw new Error('PayTR token alınamadı');
+            throw new Error('Ödeme sistemi ile bağlantı kurulamadı veya bir hata oluştu');
           }
           setPaytrToken(token);
           setLoading(false);
           setStep('form');
         } else {
+          // BANK_TRANSFER (or other non-card flows): order is created, user can proceed to success page.
+          setStep('done');
           const orderNo = responseData.barcode || responseData.orderNumber || responseData.id || '';
           setTimeout(() => {
             router.push('/siparis-basarili' + (orderNo ? `?orderNo=${encodeURIComponent(orderNo)}` : ''));
@@ -331,10 +335,29 @@ function OnayPageInner() {
       console.error('CHECKOUT_CATCH_ERROR:', error);
       setLoading(false);
       setStep('form');
-      
-      // Show error to user
-      const errorMessage = error instanceof Error ? error.message : 'Ödeme işlemi başarısız oldu. Lütfen tekrar deneyin.';
-      alert(errorMessage);
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Ödeme sistemi ile bağlantı kurulamadı veya bir hata oluştu. Lütfen tekrar deneyin.';
+      setPaytrError(errorMessage);
+    }
+  };
+
+  const handleClosePaytr = async () => {
+    const orderId = String(paytrOrderId || '').trim();
+    try {
+      if (orderId) {
+        await fetch('/api/payment/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId }),
+        }).catch(() => null);
+      }
+    } finally {
+      setPaytrToken(null);
+      setPaytrOrderId(null);
+      setPaytrError('Ödeme iptal edildi. Sepetinize geri dönebilirsiniz.');
     }
   };
 
@@ -812,6 +835,11 @@ function OnayPageInner() {
                       Lütfen işleme devam etmek için sözleşmeleri onaylayın.
                     </p>
                   )}
+                  {paytrError ? (
+                    <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                      {paytrError}
+                    </div>
+                  ) : null}
                   <button
                     type="submit"
                     disabled={!canSubmit}
@@ -826,11 +854,6 @@ function OnayPageInner() {
                       <>
                         <Loader2 size={18} className="animate-spin" />
                         İşleniyor...
-                      </>
-                    ) : step === 'done' ? (
-                      <>
-                        <CheckCircle size={18} />
-                        Ödeme Başarılı!
                       </>
                     ) : (
                       <>
@@ -857,7 +880,7 @@ function OnayPageInner() {
           <div className="relative bg-white rounded-2xl w-full max-w-[600px] h-[700px] shadow-2xl overflow-hidden">
             <button
               type="button"
-              onClick={() => setPaytrToken(null)}
+              onClick={handleClosePaytr}
               className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/90 hover:bg-white border border-gray-200 text-gray-700 flex items-center justify-center"
               aria-label="Kapat"
             >

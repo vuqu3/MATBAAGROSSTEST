@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function OldSellerLoginPage() {
-  redirect('/seller-login');
+  redirect('https://fabrika.matbaagross.com/seller-login');
 }

@@ -11,5 +11,17 @@ export default async function AdminSupplierApplicationsPage() {
     orderBy: { createdAt: 'desc' },
   });
 
-  return <SupplierApplicationsClient applications={applications} />;
+  const emails = Array.from(new Set(applications.map((a) => a.email)));
+  const users = await prisma.user.findMany({
+    where: { email: { in: emails } },
+    select: { email: true, companyDetails: true } as any,
+  });
+  const userByEmail = new Map(users.map((u) => [u.email, u]));
+
+  const applicationsWithDetails = applications.map((a) => ({
+    ...a,
+    companyDetails: userByEmail.get(a.email)?.companyDetails ?? null,
+  }));
+
+  return <SupplierApplicationsClient applications={applicationsWithDetails} />;
 }

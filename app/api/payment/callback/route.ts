@@ -42,6 +42,20 @@ function resolveOrderId(merchantOid: string): string {
   return raw;
 }
 
+function resolvePremiumOfferId(merchantOid: string): string {
+  const raw = String(merchantOid || '').trim().replace(/[^a-zA-Z0-9]/g, '');
+  if (raw.startsWith('PRM')) return raw.slice(3);
+  return raw;
+}
+
+function resolveSubscriptionMerchantOid(merchantOid: string): string {
+  return String(merchantOid || '').trim().replace(/[^a-zA-Z0-9]/g, '');
+}
+
+function toKurus(amountTl: number) {
+  return Math.round((Number.isFinite(amountTl) ? amountTl : 0) * 100);
+}
+
 export async function POST(req: Request) {
   try {
     const merchantKey = process.env.PAYTR_MERCHANT_KEY;
@@ -87,10 +101,157 @@ export async function POST(req: Request) {
       return new NextResponse('PAYTR notification failed', { status: 400 });
     }
 
+    const merchantOidClean = String(payload.merchant_oid || '').trim().replace(/[^a-zA-Z0-9]/g, '');
+    if (merchantOidClean.startsWith('SUB')) {
+      const merchantOid = resolveSubscriptionMerchantOid(payload.merchant_oid);
+
+      const purchase = await (prisma as any).subscriptionPurchase.findUnique({
+        where: { merchantOid },
+        select: {
+          id: true,
+          status: true,
+          amountKurus: true,
+          vendorId: true,
+          plan: { select: { durationDays: true } },
+        },
+      });
+
+      if (!purchase) {
+        console.error('PAYTR_CALLBACK_SUBSCRIPTION_PURCHASE_NOT_FOUND', { merchant_oid: payload.merchant_oid, merchantOid });
+        return okResponse();
+      }
+
+      if (String(purchase.status).toUpperCase() === 'PAID') {
+        return okResponse();
+      }
+
+      const receivedTotalKurus = Number.parseInt(String(payload.total_amount || '0'), 10) || 0;
+      if (purchase.amountKurus !== receivedTotalKurus) {
+        console.error('PAYTR_CALLBACK_SUBSCRIPTION_TOTAL_MISMATCH', {
+          merchant_oid: payload.merchant_oid,
+          merchantOid,
+          expectedTotalKurus: purchase.amountKurus,
+          receivedTotalKurus,
+        });
+        return okResponse();
+      }
+
+      if (payload.status === 'success') {
+        const days = Math.max(1, Math.floor(Number(purchase.plan?.durationDays) || 0));
+
+        const updated = await prisma.$transaction(async (tx) => {
+          const res = await (tx as any).subscriptionPurchase.updateMany({
+            where: { id: purchase.id, status: { not: 'PAID' } },
+            data: { status: 'PAID', paidAt: new Date() },
+          });
+
+          if (!res?.count) return { count: 0 };
+
+          const vendor = await tx.vendor.findUnique({
+            where: { id: purchase.vendorId },
+            select: { subscriptionEndsAt: true },
+          });
+
+          const base = vendor?.subscriptionEndsAt && vendor.subscriptionEndsAt.getTime() > Date.now()
+            ? vendor.subscriptionEndsAt
+            : new Date();
+
+          const nextEndsAt = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+
+          await tx.vendor.update({
+            where: { id: purchase.vendorId },
+            data: {
+              subscriptionStatus: 'ACTIVE' as any,
+              subscriptionEndsAt: nextEndsAt,
+            },
+          });
+
+          return res;
+        });
+
+        if ((updated as any)?.count === 0) return okResponse();
+      }
+
+      return okResponse();
+    }
+
+    if (merchantOidClean.startsWith('PRM')) {
+      const offerId = resolvePremiumOfferId(payload.merchant_oid);
+
+      const existingOffer = await prisma.premiumQuoteOffer.findUnique({
+        where: { id: offerId },
+        select: {
+          id: true,
+          status: true,
+          requestId: true,
+          vendor: { select: { ownerId: true } },
+          request: { select: { userId: true } },
+        },
+      });
+
+      if (!existingOffer) {
+        console.error('PAYTR_CALLBACK_PREMIUM_OFFER_NOT_FOUND', { merchant_oid: payload.merchant_oid, offerId });
+        return okResponse();
+      }
+
+      if (existingOffer.status === 'PAID') {
+        return okResponse();
+      }
+
+      if (payload.status === 'success') {
+        const updated = await prisma.premiumQuoteOffer.updateMany({
+          where: { id: existingOffer.id, status: { not: 'PAID' } },
+          data: { status: 'PAID' },
+        });
+
+        if (updated.count === 0) {
+          return okResponse();
+        }
+
+        await prisma.premiumQuoteRequest.updateMany({
+          where: { id: existingOffer.requestId, status: { not: 'PROCESSING' } },
+          data: { status: 'PROCESSING' },
+        });
+
+        const systemText =
+          '🟢 ÖDEME ONAYLANDI: Müşteri ödemeyi başarıyla tamamladı. Tutar Matbaagross güvenli havuzuna aktarılmıştır. Üretime başlayabilirsiniz.';
+
+        const senderId = existingOffer.vendor.ownerId;
+        const receiverId = existingOffer.request.userId;
+
+        if (senderId && receiverId) {
+          const exists = await prisma.quoteMessage.findFirst({
+            where: {
+              quoteId: existingOffer.id,
+              isSystemMessage: true,
+              content: systemText,
+            },
+            select: { id: true },
+          });
+
+          if (!exists) {
+            await prisma.quoteMessage.create({
+              data: {
+                quoteId: existingOffer.id,
+                senderId,
+                receiverId,
+                type: 'TEXT',
+                content: systemText,
+                isSystemMessage: true,
+              },
+              select: { id: true },
+            });
+          }
+        }
+      }
+
+      return okResponse();
+    }
+
     const orderId = resolveOrderId(payload.merchant_oid);
     const existing = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, paymentStatus: true, paymentMethod: true },
+      select: { id: true, paymentStatus: true, paymentMethod: true, totalAmount: true },
     });
 
     if (!existing) {
@@ -102,14 +263,79 @@ export async function POST(req: Request) {
       return okResponse();
     }
 
+    const expectedTotalKurus = toKurus(existing.totalAmount);
+    const receivedTotalKurus = Number.parseInt(String(payload.total_amount || '0'), 10) || 0;
+    if (expectedTotalKurus !== receivedTotalKurus) {
+      console.error('PAYTR_CALLBACK_TOTAL_MISMATCH', {
+        merchant_oid: payload.merchant_oid,
+        orderId,
+        expectedTotalKurus,
+        receivedTotalKurus,
+      });
+      // Always respond OK to PayTR to stop retries, but do NOT mark as paid.
+      return okResponse();
+    }
+
     // ÖNEMLİ: PayTR tekrar bildirim atabileceği için update işlemi idempotent olmalı.
     if (payload.status === 'success') {
-      const updated = await prisma.order.updateMany({
-        where: { id: existing.id, paymentStatus: { not: 'PAID' } },
-        data: {
-          paymentStatus: 'PAID',
-          status: 'PROCESSING',
-        },
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.order.updateMany({
+          where: { id: existing.id, paymentStatus: { not: 'PAID' } },
+          data: {
+            paymentStatus: 'PAID',
+            status: 'PROCESSING',
+          },
+        });
+
+        // Only if we actually transitioned to PAID, decrement stock (idempotent).
+        if (res.count > 0 && existing.paymentMethod === 'CARD') {
+          const orderForStock = await tx.order.findUnique({
+            where: { id: existing.id },
+            select: {
+              id: true,
+              items: {
+                select: {
+                  productId: true,
+                  quantity: true,
+                  options: true,
+                },
+              },
+            },
+          });
+
+          const items = Array.isArray(orderForStock?.items) ? orderForStock!.items : [];
+          for (const it of items) {
+            const qty = Math.max(1, Math.floor(Number((it as any)?.quantity) || 0));
+            const options = (it as any)?.options as Record<string, any> | null | undefined;
+            const variantId = options?.variantId as string | undefined;
+            const variantName = options?.variantName as string | undefined;
+
+            if (variantId || variantName) {
+              // Try update by id first; if not available, fallback to (productId+name)
+              if (variantId) {
+                await tx.productVariant.update({
+                  where: { id: variantId },
+                  data: { stock: { decrement: qty } },
+                }).catch(() => null);
+              } else {
+                await tx.productVariant.updateMany({
+                  where: { productId: it.productId, name: String(variantName) },
+                  data: { stock: { decrement: qty } },
+                }).catch(() => null);
+              }
+            }
+
+            await tx.product.update({
+              where: { id: it.productId },
+              data: {
+                stock: { decrement: qty },
+                stockQuantity: { decrement: qty },
+              },
+            }).catch(() => null);
+          }
+        }
+
+        return res;
       });
 
       if (updated.count === 0) {
@@ -144,11 +370,13 @@ export async function POST(req: Request) {
             },
             items: {
               select: {
+                productId: true,
                 productName: true,
                 quantity: true,
                 unitPrice: true,
                 totalPrice: true,
                 imageUrl: true,
+                options: true,
               },
             },
           },

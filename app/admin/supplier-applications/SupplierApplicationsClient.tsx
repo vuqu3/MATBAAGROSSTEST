@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Trash2, Phone, Mail, Building2, User, Package, UserPlus, X, Key, Mail as MailIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Check, Trash2, Phone, Mail, Building2, User, Package, UserPlus, X } from 'lucide-react';
 
 type Application = {
   id: string;
@@ -9,6 +10,16 @@ type Application = {
   contactName: string;
   phone: string;
   email: string;
+  companyDetails?: string | null;
+  companyType?: string | null;
+  taxNumber?: string | null;
+  city?: string | null;
+  district?: string | null;
+  taxPlateUrl?: string | null;
+  tradeRegistryUrl?: string | null;
+  signatureCircularUrl?: string | null;
+  identityDocumentUrl?: string | null;
+  isKvkkAccepted?: boolean;
   productGroup: string;
   status: 'PENDING' | 'REVIEWED' | 'APPROVED' | 'REJECTED';
   createdAt: Date;
@@ -16,19 +27,14 @@ type Application = {
 };
 
 export default function SupplierApplicationsClient({ applications }: { applications: Application[] }) {
+  const router = useRouter();
   const [apps, setApps] = useState<Application[]>(applications);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [vendorModal, setVendorModal] = useState<{
-    isOpen: boolean;
-    application: Application | null;
-    password: string;
-    sendEmail: boolean;
-  }>({
+  const [success, setSuccess] = useState<string | null>(null);
+  const [inspectModal, setInspectModal] = useState<{ isOpen: boolean; application: Application | null }>({
     isOpen: false,
     application: null,
-    password: 'matbaagross123',
-    sendEmail: true,
   });
 
   const updateStatus = async (id: string, status: 'REVIEWED' | 'REJECTED') => {
@@ -53,36 +59,53 @@ export default function SupplierApplicationsClient({ applications }: { applicati
     }
   };
 
-  const createVendor = async () => {
-    if (!vendorModal.application) return;
-    
-    setLoadingId(vendorModal.application.id);
+  const updateStatusWithNotify = async (
+    id: string,
+    status: 'REVIEWED' | 'REJECTED',
+    notify: 'MISSING_DOCS' | 'REJECTED'
+  ) => {
+    setLoadingId(id);
     setError(null);
-    
     try {
-      const res = await fetch(`/api/supplier-applications/${vendorModal.application.id}/create-vendor`, {
-        method: 'POST',
+      const res = await fetch(`/api/supplier-applications/${id}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          password: vendorModal.password,
-          sendEmail: vendorModal.sendEmail 
-        }),
+        body: JSON.stringify({ status, notify }),
       });
-      
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error ?? 'Satıcı oluşturma başarısız.');
+        setError(data.error ?? 'İşlem başarısız.');
         return;
       }
-      
-      // Başvuruyu APPROVED durumuna güncelle
-      setApps((prev) => prev.map((a) => 
-        a.id === vendorModal.application!.id ? { ...a, status: 'APPROVED' as const } : a
-      ));
-      
-      // Modal'ı kapat
-      setVendorModal({ isOpen: false, application: null, password: 'matbaagross123', sendEmail: true });
-      
+      setApps((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+    } catch {
+      setError('Bir hata oluştu.');
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  const approveApplication = async (app: Application) => {
+    const ok = confirm('Bu başvuruyu onaylamak istediğinizden emin misiniz?');
+    if (!ok) return;
+    setLoadingId(app.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/supplier-applications/${app.id}/create-vendor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sendEmail: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? 'Onay başarısız.');
+        return;
+      }
+      setApps((prev) => prev.map((a) => (a.id === app.id ? { ...a, status: 'APPROVED' as const } : a)));
+      setInspectModal({ isOpen: false, application: null });
+      setSuccess('Başvuru başarıyla onaylandı ve satıcı paneli açıldı.');
+      router.refresh();
     } catch {
       setError('Bir hata oluştu.');
     } finally {
@@ -140,8 +163,8 @@ export default function SupplierApplicationsClient({ applications }: { applicati
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Tedarikçi Başvuruları</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Onay bekleyen tedarikçi başvuruları</p>
+          <h1 className="text-xl font-semibold text-slate-900">Premium Üretici Başvuruları</h1>
+          <p className="mt-0.5 text-sm text-slate-500">Onay bekleyen premium üretici başvuruları</p>
         </div>
         <span className="text-sm text-slate-400">{apps.length} başvuru</span>
       </div>
@@ -149,6 +172,12 @@ export default function SupplierApplicationsClient({ applications }: { applicati
       {error && (
         <div className="mt-3 px-4 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="mt-3 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm">
+          {success}
         </div>
       )}
 
@@ -162,8 +191,10 @@ export default function SupplierApplicationsClient({ applications }: { applicati
                 <th className="px-4 py-3 text-left font-medium text-slate-700">Tarih</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-700">Firma</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-700">Yetkili</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-700">Vergi / Lokasyon</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-700">İletişim</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-700">Ürün Grubu</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-700">KVKK</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-700">Durum</th>
                 <th className="px-4 py-3 text-center font-medium text-slate-700">Aksiyonlar</th>
               </tr>
@@ -188,6 +219,19 @@ export default function SupplierApplicationsClient({ applications }: { applicati
                   </td>
                   <td className="px-4 py-3">
                     <div className="space-y-1">
+                      <div className="text-xs text-slate-700">
+                        <span className="font-medium">Vergi No:</span> {app.taxNumber || '—'}
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        {app.city || '—'}{app.district ? ` / ${app.district}` : ''}
+                      </div>
+                      {app.companyType && (
+                        <div className="text-[11px] text-slate-500">{app.companyType}</div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="space-y-1">
                       <div className="flex items-center gap-1 text-slate-600">
                         <Phone className="w-3 h-3" />
                         <span className="text-xs">{app.phone}</span>
@@ -205,19 +249,35 @@ export default function SupplierApplicationsClient({ applications }: { applicati
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(app.status)}`}>
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        app.isKvkkAccepted ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {app.isKvkkAccepted ? 'Kabul' : 'Yok'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(app.status)}`}> 
                       {getStatusText(app.status)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => setInspectModal({ isOpen: true, application: app })}
+                        className="px-2 py-1 text-xs font-medium rounded-md bg-slate-900 text-white hover:bg-slate-800"
+                        title="Başvuruyu incele"
+                      >
+                        🔍 İncele
+                      </button>
                       {app.status === 'PENDING' && (
                         <>
                           <button
-                            onClick={() => setVendorModal({ ...vendorModal, isOpen: true, application: app })}
+                            onClick={() => approveApplication(app)}
                             disabled={loadingId === app.id}
                             className="p-1.5 text-slate-400 hover:text-green-600 disabled:opacity-50"
-                            title="Onayla ve Hesap Aç"
+                            title="Onayla"
                           >
                             <UserPlus size={14} />
                           </button>
@@ -248,83 +308,149 @@ export default function SupplierApplicationsClient({ applications }: { applicati
         )}
       </div>
 
-      {/* Satıcı Oluşturma Modal */}
-      {vendorModal.isOpen && vendorModal.application && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Satıcı Hesabı Oluştur</h3>
+      {/* Başvuru İnceleme Modal */}
+      {inspectModal.isOpen && inspectModal.application && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl overflow-hidden shadow-xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Başvuru İncele</h3>
+                <p className="text-xs text-slate-500">Detaylı evrak ve firma bilgisi kontrol ekranı</p>
+              </div>
               <button
-                onClick={() => setVendorModal({ ...vendorModal, isOpen: false })}
+                onClick={() => setInspectModal({ isOpen: false, application: null })}
                 className="text-slate-400 hover:text-slate-600"
+                title="Kapat"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="bg-slate-50 p-3 rounded-lg">
-                <p className="text-sm font-medium text-slate-700">{vendorModal.application.companyName}</p>
-                <p className="text-xs text-slate-500">{vendorModal.application.contactName}</p>
-                <p className="text-xs text-slate-500">{vendorModal.application.email}</p>
-              </div>
+            <div className="px-6 py-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="rounded-xl border border-slate-200 bg-white p-5">
+                  <h4 className="text-sm font-semibold text-slate-900 mb-4">Firma Detayları</h4>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-start gap-2">
+                      <Building2 className="w-4 h-4 mt-0.5 text-slate-400" />
+                      <div>
+                        <div className="text-xs text-slate-500">Firma Adı</div>
+                        <div className="font-medium text-slate-900">{inspectModal.application.companyName}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <User className="w-4 h-4 mt-0.5 text-slate-400" />
+                      <div>
+                        <div className="text-xs text-slate-500">Yetkili Kişi</div>
+                        <div className="font-medium text-slate-900">{inspectModal.application.contactName}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Phone className="w-4 h-4 mt-0.5 text-slate-400" />
+                      <div>
+                        <div className="text-xs text-slate-500">Telefon</div>
+                        <div className="font-medium text-slate-900">{inspectModal.application.phone}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Mail className="w-4 h-4 mt-0.5 text-slate-400" />
+                      <div>
+                        <div className="text-xs text-slate-500">E-posta</div>
+                        <div className="font-medium text-slate-900">{inspectModal.application.email}</div>
+                      </div>
+                    </div>
 
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
-                  <Key size={16} />
-                  Başlangıç Şifresi
-                </label>
-                <input
-                  type="text"
-                  value={vendorModal.password}
-                  onChange={(e) => setVendorModal({ ...vendorModal, password: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Şifre belirleyin"
-                />
-              </div>
+                    <div className="pt-3 border-t border-slate-100" />
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="sendEmail"
-                  checked={vendorModal.sendEmail}
-                  onChange={(e) => setVendorModal({ ...vendorModal, sendEmail: e.target.checked })}
-                  className="rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                />
-                <label htmlFor="sendEmail" className="text-sm text-slate-700 flex items-center gap-2">
-                  <MailIcon size={16} />
-                  Satıcıya e-posta gönder
-                </label>
-              </div>
+                    <div className="text-xs text-slate-600">
+                      <span className="font-medium text-slate-700">Vergi No:</span> {inspectModal.application.taxNumber || '—'}
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      <span className="font-medium text-slate-700">Lokasyon:</span> {inspectModal.application.city || '—'}
+                      {inspectModal.application.district ? ` / ${inspectModal.application.district}` : ''}
+                    </div>
+                    {inspectModal.application.companyType && (
+                      <div className="text-xs text-slate-600">
+                        <span className="font-medium text-slate-700">Şirket Tipi:</span> {inspectModal.application.companyType}
+                      </div>
+                    )}
 
-              {vendorModal.sendEmail && (
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-xs text-blue-700">
-                    Satıcıya aşağıdaki bilgiler gönderilecek:
-                  </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    • Giriş adresi: /seller-login<br/>
-                    • Geçici şifre: {vendorModal.password}<br/>
-                    • Şifre değiştirme ve belge gönderme talimatları
-                  </p>
+                    {inspectModal.application.companyDetails && (
+                      <div className="pt-3 border-t border-slate-100">
+                        <div className="text-xs font-semibold text-slate-700">Firma Kapasitesi ve Makine Parkuru</div>
+                        <div className="mt-1 text-xs text-slate-600 whitespace-pre-wrap">
+                          {inspectModal.application.companyDetails}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+
+                <div className="rounded-xl border border-slate-200 bg-white p-5">
+                  <h4 className="text-sm font-semibold text-slate-900 mb-4">Resmi Evraklar</h4>
+                  <div className="space-y-3">
+                    {([
+                      { key: 'taxPlateUrl', title: 'Vergi Levhası', url: inspectModal.application.taxPlateUrl },
+                      { key: 'tradeRegistryUrl', title: 'Ticaret Sicil Gazetesi', url: inspectModal.application.tradeRegistryUrl },
+                      { key: 'signatureCircularUrl', title: 'İmza Sirküsü', url: inspectModal.application.signatureCircularUrl },
+                      { key: 'identityDocumentUrl', title: 'Yetkili Kimlik', url: inspectModal.application.identityDocumentUrl },
+                    ] as const).map((doc) => (
+                      <div key={doc.key} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                        <div>
+                          <div className="text-sm font-medium text-slate-900">{doc.title}</div>
+                          {doc.url ? (
+                            <div className="text-[11px] text-slate-500 break-all">{doc.url}</div>
+                          ) : (
+                            <div className="text-[11px] font-medium text-red-600">Evrak Yüklenmemiş</div>
+                          )}
+                        </div>
+                        {doc.url && (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="shrink-0 ml-3 inline-flex items-center justify-center rounded-lg bg-white border border-slate-200 px-3 py-2 text-xs font-medium text-slate-800 hover:bg-slate-50"
+                          >
+                            📄 Görüntüle / İndir
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setVendorModal({ ...vendorModal, isOpen: false })}
-                className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50"
-              >
-                İptal
-              </button>
-              <button
-                onClick={createVendor}
-                disabled={loadingId === vendorModal.application.id || !vendorModal.password.trim()}
-                className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loadingId === vendorModal.application.id ? 'Oluşturuluyor...' : 'Hesabı Oluştur'}
-              </button>
+            <div className="px-6 py-5 border-t border-slate-100">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <button
+                  onClick={() => approveApplication(inspectModal.application!)}
+                  disabled={loadingId === inspectModal.application.id}
+                  className="w-full rounded-xl bg-emerald-600 text-white px-4 py-3 font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  🟢 Başvuruyu Onayla
+                </button>
+                <button
+                  onClick={async () => {
+                    await updateStatusWithNotify(inspectModal.application.id, 'REVIEWED', 'MISSING_DOCS');
+                    setInspectModal({ isOpen: false, application: null });
+                  }}
+                  disabled={loadingId === inspectModal.application.id}
+                  className="w-full rounded-xl bg-amber-500 text-white px-4 py-3 font-semibold hover:bg-amber-600 disabled:opacity-50"
+                >
+                  🟡 Eksik Evrak İste
+                </button>
+                <button
+                  onClick={async () => {
+                    await updateStatusWithNotify(inspectModal.application.id, 'REJECTED', 'REJECTED');
+                    setInspectModal({ isOpen: false, application: null });
+                  }}
+                  disabled={loadingId === inspectModal.application.id}
+                  className="w-full rounded-xl bg-red-600 text-white px-4 py-3 font-semibold hover:bg-red-700 disabled:opacity-50"
+                >
+                  🔴 Reddet
+                </button>
+              </div>
             </div>
           </div>
         </div>

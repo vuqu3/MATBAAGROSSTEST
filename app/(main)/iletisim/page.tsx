@@ -42,7 +42,7 @@ export default function IletisimPage() {
     {
       icon: Phone,
       title: 'Telefon',
-      content: 'Yakında eklenecektir'
+      content: '+90 533 368 39 09'
     },
     {
       icon: Mail,
@@ -113,6 +113,13 @@ export default function IletisimPage() {
                           {bilgi.title === 'E-posta' ? (
                             <a 
                               href={`mailto:${bilgi.content}`}
+                              className="text-gray-600 hover:text-orange-500 transition-colors"
+                            >
+                              {bilgi.content}
+                            </a>
+                          ) : bilgi.title === 'Telefon' ? (
+                            <a 
+                              href={`tel:${bilgi.content.replace(/\s/g, '')}`}
                               className="text-gray-600 hover:text-orange-500 transition-colors"
                             >
                               {bilgi.content}

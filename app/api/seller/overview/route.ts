@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, PremiumQuoteRequestStatus, PremiumQuoteOfferStatus } from '@prisma/client';
 import { resolveVendorForSession } from '@/lib/getMatbaaGrossVendor';
 
 export async function GET() {
@@ -16,7 +16,7 @@ export async function GET() {
   }
 
   const vendorId = String((vendor as any).id);
-  const vendorCommissionRate = Number((vendor as any).commissionRate ?? 0);
+  const vendorCommissionRate = 0;
 
   // 30 gün öncesinin tarihi
   const thirtyDaysAgo = new Date();
@@ -33,6 +33,9 @@ export async function GET() {
     recentOrderItems,
     vendorWithSlug,
     salesChart,
+    totalRfqRequests,
+    quotedRequests,
+    approvedOffersRaw,
   ] = await Promise.all([
     prisma.orderItem.aggregate({
       where: { vendorId },
@@ -88,13 +91,28 @@ export async function GET() {
       },
       _sum: { totalPrice: true },
     }),
+    // RFQ: toplam açık talepler
+    prisma.premiumQuoteRequest.count({
+      where: { status: PremiumQuoteRequestStatus.PENDING },
+    }),
+    // RFQ: bu üreticinin teklif verdiği işler
+    prisma.premiumQuoteOffer.count({
+      where: { vendorId, status: PremiumQuoteOfferStatus.PENDING },
+    }),
+    // RFQ: onaylanan + ödenen teklifler
+    prisma.premiumQuoteOffer.findMany({
+      where: {
+        vendorId,
+        status: { in: [PremiumQuoteOfferStatus.ACCEPTED, PremiumQuoteOfferStatus.PAID] },
+      },
+      select: { totalPrice: true },
+    }),
   ]);
 
   const totalSales = totalSalesRaw._sum?.totalPrice ?? 0;
   const cardSales = cardSalesRaw._sum?.totalPrice ?? 0;
   const bankTransferSales = bankTransferSalesRaw._sum?.totalPrice ?? 0;
-  const commissionRate = vendorCommissionRate / 100;
-  const earnings = itemsForEarnings.reduce((sum, i) => sum + (1 - commissionRate) * i.totalPrice, 0);
+  const earnings = itemsForEarnings.reduce((sum, i) => sum + i.totalPrice, 0);
 
   // 30 günlük satış verisini gün bazında grupla
   const salesByDay = new Map<string, number>();
@@ -119,6 +137,9 @@ export async function GET() {
     total,
   }));
 
+  const approvedCount = approvedOffersRaw.length;
+  const rfqRevenue = approvedOffersRaw.reduce((sum, o) => sum + Number(o.totalPrice ?? 0), 0);
+
   return NextResponse.json({
     totalSales,
     cardSales,
@@ -129,6 +150,10 @@ export async function GET() {
     earnings,
     commissionRate: vendorCommissionRate,
     chartData,
+    totalRfqRequests,
+    quotedRequests,
+    approvedRequests: approvedCount,
+    rfqRevenue,
     recentOrders: (recentOrderItems as any[]).map((item) => ({
       id: item.id,
       barcode: item.order?.barcode ?? null,

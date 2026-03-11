@@ -18,6 +18,7 @@ interface Product {
   productType?: 'READY' | 'CUSTOM';
   stock?: number | null;
   stockQuantity?: number | null;
+  categorySlug?: string;
 }
 
 interface ProductCarouselProps {
@@ -125,6 +126,7 @@ export default function ProductCarousel({ title, products, showTimer = false, ti
                   productType={product.productType}
                   stock={product.stock}
                   stockQuantity={product.stockQuantity}
+                  categorySlug={product.categorySlug}
                 />
               </div>
             ))}

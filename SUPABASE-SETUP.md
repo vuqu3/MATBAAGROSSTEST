@@ -34,7 +34,7 @@ DATABASE_URL="postgresql://postgres:GERÇEK_ŞİFRENİZ@db.wgwxnwbpvqfjjlzfbgrz.
    ```
 
 5. **Admin Paneline Giriş:**
-   - URL: `http://localhost:3000/admin/login`
+   - URL: `https://www.matbaagross.com/admin/login`
    - Email: `admin@matbaagross.com`
    - Şifre: `admin123`
 

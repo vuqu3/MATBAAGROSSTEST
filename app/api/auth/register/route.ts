@@ -102,7 +102,7 @@ export async function POST(request: Request) {
         <h1>Hoş Geldiniz, ${user.name}!</h1>
         <p>MatbaaGross ailesine katıldığınız için teşekkür ederiz.</p>
         <p>Hesabınızla giriş yaparak sipariş verebilir, faturalarınızı yönetebilirsiniz.</p>
-        <p><a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/giris">Giriş Yap</a></p>
+        <p><a href="${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'https://www.matbaagross.com'}/giris">Giriş Yap</a></p>
         <p>MatbaaGross - Türkiye'nin Online Matbaa Toptancısı</p>
       `,
     };

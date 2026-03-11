@@ -17,10 +17,42 @@ async function testDatabaseConnection() {
   }
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+const cookieDomain = isProduction ? '.matbaagross.com' : undefined;
+
 const authOptions: NextAuthConfig = {
   secret: process.env.NEXTAUTH_SECRET,
-  // Trust host için (development'ta gerekli olabilir)
   trustHost: true,
+  cookies: {
+    sessionToken: {
+      name: isProduction ? '__Secure-authjs.session-token' : 'authjs.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: isProduction,
+        domain: cookieDomain,
+      },
+    },
+    callbackUrl: {
+      name: isProduction ? '__Secure-authjs.callback-url' : 'authjs.callback-url',
+      options: {
+        sameSite: 'lax',
+        path: '/',
+        secure: isProduction,
+        domain: cookieDomain,
+      },
+    },
+    csrfToken: {
+      name: isProduction ? '__Host-authjs.csrf-token' : 'authjs.csrf-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: isProduction,
+      },
+    },
+  },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? '',
@@ -32,30 +64,44 @@ const authOptions: NextAuthConfig = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials: Record<string, string> | undefined) {
-        if (!credentials?.email || !credentials?.password) {
+      async authorize(credentials) {
+        const rawEmail = credentials?.email;
+        const rawPassword = credentials?.password;
+
+        if (typeof rawEmail !== 'string' || typeof rawPassword !== 'string') {
+          console.error('[auth][credentials] missing email or password');
           return null;
         }
+
+        const email = String(rawEmail).trim().toLowerCase();
+        const password = String(rawPassword);
 
         try {
           // Veritabanı bağlantısını kontrol et
           const isConnected = await testDatabaseConnection();
           if (!isConnected) {
-            console.error('Database connection failed');
+            console.error('[auth][credentials] database connection failed');
             return null;
           }
 
           const user = await prisma.user.findUnique({
-            where: { email: credentials.email },
+            where: { email },
           });
 
           if (!user) {
+            console.error('[auth][credentials] user not found', { email });
             return null;
           }
 
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+          if (!user.password || typeof user.password !== 'string') {
+            console.error('[auth][credentials] user has no password hash', { email });
+            return null;
+          }
+
+          const isPasswordValid = await bcrypt.compare(password, user.password);
 
           if (!isPasswordValid) {
+            console.error('[auth][credentials] invalid password', { email });
             return null;
           }
 
@@ -81,19 +127,29 @@ const authOptions: NextAuthConfig = {
       const email = user?.email;
       if (!email) return false;
 
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (existing) return true;
+      let dbUser = await prisma.user.findUnique({ where: { email } });
+      if (!dbUser) {
+        const randomPassword = crypto.randomUUID();
+        const hashed = await bcrypt.hash(randomPassword, 10);
+        dbUser = await prisma.user.create({
+          data: {
+            email,
+            password: hashed,
+            name: user?.name ?? null,
+          },
+        });
+      }
 
-      const randomPassword = crypto.randomUUID();
-      const hashed = await bcrypt.hash(randomPassword, 10);
+      // Link any anonymous PremiumQuoteRequests that match this email
+      try {
+        await (prisma.premiumQuoteRequest as any).updateMany({
+          where: { contactEmail: email, userId: null },
+          data: { userId: dbUser.id },
+        });
+      } catch (linkErr) {
+        console.error('[auth][google] request link error:', linkErr);
+      }
 
-      await prisma.user.create({
-        data: {
-          email,
-          password: hashed,
-          name: user?.name ?? null,
-        },
-      });
       return true;
     },
     async jwt({ token, user }) {

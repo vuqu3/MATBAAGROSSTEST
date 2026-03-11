@@ -23,13 +23,9 @@ function OrderSuccessContent() {
   const [orderNumber, setOrderNumber] = useState(orderNoFromQuery);
   const [visible, setVisible] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
   const [copiedKey, setCopiedKey] = useState<'recipient' | 'iban' | 'orderNo' | null>(null);
-
-  useEffect(() => {
-    const code = (orderNoFromQuery || orderIdFromQuery).trim();
-    if (!code) return;
-    clearCart();
-  }, [clearCart, orderIdFromQuery, orderNoFromQuery]);
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100);
@@ -59,10 +55,14 @@ function OrderSuccessContent() {
   };
 
   useEffect(() => {
+    let pollTimer: number | null = null;
+    let cancelled = false;
+
     const run = async () => {
       const code = (orderNoFromQuery || orderIdFromQuery).trim();
       if (!code) return;
       try {
+        setIsCheckingPayment(true);
         const res = await fetch(`/api/orders/track?code=${encodeURIComponent(code)}`);
         if (!res.ok) return;
         const data = (await res.json()) as TrackOrderResponse;
@@ -75,12 +75,43 @@ function OrderSuccessContent() {
         }
 
         if (data?.paymentMethod) setPaymentMethod(data.paymentMethod);
+        if (typeof data?.paymentStatus === 'string') setPaymentStatus(data.paymentStatus);
+
+        const method = data?.paymentMethod;
+        const status = data?.paymentStatus;
+
+        // CART CLEAR RULES:
+        // - BANK_TRANSFER: order is created and user should proceed with transfer -> clear cart immediately
+        // - CARD: clear cart only after PayTR callback sets paymentStatus=PAID
+        if (method === 'BANK_TRANSFER') {
+          clearCart();
+        }
+        if (method === 'CARD' && status === 'PAID') {
+          clearCart();
+        }
+
+        // If card payment not yet paid, keep polling for callback updates.
+        if (method === 'CARD' && status !== 'PAID') {
+          if (pollTimer) window.clearTimeout(pollTimer);
+          pollTimer = window.setTimeout(() => {
+            if (!cancelled) run();
+          }, 2500);
+        }
       } catch {
         // ignore
+      } finally {
+        setIsCheckingPayment(false);
       }
     };
+
     run();
-  }, [orderIdFromQuery, orderNoFromQuery]);
+    return () => {
+      cancelled = true;
+      if (pollTimer) window.clearTimeout(pollTimer);
+    };
+  }, [clearCart, orderIdFromQuery, orderNoFromQuery]);
+
+  const isCardPending = paymentMethod === 'CARD' && paymentStatus !== 'PAID';
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
@@ -157,13 +188,27 @@ function OrderSuccessContent() {
 
         {/* Title */}
         <h1 className="text-2xl font-extrabold text-gray-900 mb-2">
-          Siparişiniz Alındı!
+          {isCardPending ? 'Ödeme Bekleniyor' : 'Siparişiniz Alındı!'}
         </h1>
         <p className="text-gray-500 text-sm mb-6">
           {paymentMethod === 'BANK_TRANSFER'
             ? 'Siparişiniz alındı. Ödeme havale/EFT ile tamamlandığında siparişiniz işleme alınacaktır.'
-            : 'Ödemeniz başarıyla gerçekleşti. Siparişiniz en kısa sürede hazırlanacaktır.'}
+            : isCardPending
+              ? 'Ödeme onayı bekleniyor. Ödeme tamamlandığında bu sayfa otomatik olarak güncellenecektir.'
+              : 'Ödemeniz başarıyla gerçekleşti. Siparişiniz en kısa sürede hazırlanacaktır.'}
         </p>
+
+        {isCardPending ? (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6 text-left">
+            <div className="text-sm font-extrabold text-gray-900 mb-2">PayTR Onayı Bekleniyor</div>
+            <div className="text-sm text-gray-700">
+              {isCheckingPayment ? 'Durum kontrol ediliyor…' : 'Durum kontrol ediliyor.'}
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              Ödeme başarılı ise birkaç saniye içinde otomatik güncellenecek. Güncellenmezse sayfayı yenileyebilirsiniz.
+            </div>
+          </div>
+        ) : null}
 
         {/* Order number card */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">

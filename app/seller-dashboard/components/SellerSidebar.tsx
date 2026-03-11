@@ -11,6 +11,7 @@ import {
   BadgeCheck,
   ShoppingCart,
   MessageCircle,
+  Store,
   Settings,
   ChevronLeft,
   Sparkles,
@@ -20,11 +21,14 @@ const mainNavItems: { label: string; href: string; icon: React.ElementType; isPr
   { label: 'Özet', href: '/seller-dashboard/overview', icon: LayoutDashboard },
   { label: 'Ürünlerim', href: '/seller-dashboard/products', icon: Package },
   { label: 'Siparişler', href: '/seller-dashboard/orders', icon: ShoppingCart },
+  { label: 'Abonelik & Fatura', href: '/seller-dashboard/subscription', icon: BadgeCheck },
   { label: 'Teklif Havuzu', href: '/seller-dashboard/teklif-havuzu', icon: Inbox },
   { label: 'Verilen Teklifler', href: '/seller-dashboard/verilen-teklifler', icon: Send },
   { label: 'Onaylanan Teklifler', href: '/seller-dashboard/onaylanan-teklifler', icon: BadgeCheck },
   { label: 'Müşteri Soruları', href: '/seller-dashboard/questions', icon: MessageCircle },
   { label: 'Makine İlanı Ver', href: '/seller-dashboard/makine-ilani-ver', icon: Sparkles, isPrime: true },
+  { label: 'Makine Pazarı', href: '/seller-dashboard/makine-pazari', icon: ShoppingCart },
+  { label: 'Mağaza Profilim', href: '/seller-dashboard/magaza-profilim', icon: Store },
   { label: 'Mağaza Ayarları', href: '/seller-dashboard/settings', icon: Settings },
 ];
 
@@ -96,7 +100,16 @@ export default function SellerSidebar({
                   } ${collapsed ? 'justify-center' : ''}`}
                 >
                   <Icon className={`h-5 w-5 shrink-0 ${item.isPrime ? 'text-[#D4AF37]' : ''}`} />
-                  {!collapsed && <span className={item.isPrime ? 'font-bold' : ''}>{item.label}</span>}
+                  {!collapsed && (
+                    <span className={item.isPrime ? 'font-bold' : ''}>
+                      {item.label}
+                      {isProducts && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                          Askıda
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </Link>
                 {isProducts && !collapsed && (
                   <Link
@@ -108,7 +121,12 @@ export default function SellerSidebar({
                     }`}
                   >
                     <PlusCircle className="h-4 w-4 shrink-0" />
-                    <span>Yeni Ürün Ekle</span>
+                    <span>
+                      Yeni Ürün Ekle
+                      <span className="ml-2 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                        Askıda
+                      </span>
+                    </span>
                   </Link>
                 )}
               </div>

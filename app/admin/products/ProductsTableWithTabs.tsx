@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Package, Edit, Plus, AlertTriangle, CheckCircle, MinusCircle, Check, X, Search, ChevronDown } from 'lucide-react';
+import { Package, Edit, Plus, AlertTriangle, CheckCircle, MinusCircle, Check, X, Search, ChevronDown, Upload } from 'lucide-react';
 import DeleteButton from './DeleteButton';
 
 type Category = {
@@ -33,6 +33,7 @@ type ProductWithCategory = {
   supplier: string | null;
   vendorName: string | null;
   status?: ProductStatus | null;
+  productType?: string | null;
   buyPrice: number | null;
   purchasePrice: number | null;
   basePrice: number;
@@ -250,13 +251,22 @@ export default function ProductsTableWithTabs({ products, categories }: Props) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-gray-900">Ürünler</h1>
-        <Link
-          href="/admin/products/new"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-        >
-          <Plus size={18} />
-          Yeni Ürün Ekle
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/toplu-yukleme"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors text-sm"
+          >
+            <Upload size={18} />
+            Toplu Ürün Yükle
+          </Link>
+          <Link
+            href="/admin/products/new"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+          >
+            <Plus size={18} />
+            Yeni Ürün Ekle
+          </Link>
+        </div>
       </div>
 
       {/* Onay Yönetimi sekmeleri */}
@@ -479,7 +489,14 @@ export default function ProductsTableWithTabs({ products, categories }: Props) {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-medium text-gray-900">{product.name}</span>
+                          {product.productType === 'CUSTOM' ? (
+                            <span className="px-1.5 py-0.5 text-[10px] rounded font-semibold bg-purple-100 text-purple-800 whitespace-nowrap">Özel Baskı</span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 text-[10px] rounded font-semibold bg-blue-100 text-blue-800 whitespace-nowrap">Hazır Stok</span>
+                          )}
+                        </div>
                         {product.description && (
                           <div className="text-xs text-gray-500 line-clamp-1">{product.description}</div>
                         )}

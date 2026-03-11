@@ -41,12 +41,16 @@ export default function SikcaSorulanlarPage() {
     ],
     odeme: [
       {
+        soru: 'Ödeme yöntemleri nelerdir?',
+        cevap: 'Ödemelerinizi, sipariş numaranızı belirterek Havale/EFT yoluyla veya güvenli ödeme altyapımız PayTR üzerinden kredi kartınızla gerçekleştirebilirsiniz.'
+      },
+      {
         soru: 'Havale ile ödeme yapabilir miyim?',
-        cevap: 'Evet, havale ile ödeme kabul ediyoruz. Ödeme adımları için müşteri hizmetlerimizle iletişime geçebilirsiniz.'
+        cevap: 'Evet, havale ile ödeme kabul ediyoruz. Ödeme adımında çıkan sipariş numaranızı açıklama kısmına yazmanız, siparişinizin onaylanma sürecini hızlandıracaktır.'
       },
       {
         soru: 'Kapıda ödeme seçeneği var mı?',
-        cevap: 'Evet, kapıda ödeme seçeneğimiz mevcuttur. Teslimat sırasında nakit ödeme yapabilirsiniz.'
+        cevap: 'Maalesef, sistemimizde kapıda ödeme seçeneği bulunmamaktadır.'
       }
     ]
   };

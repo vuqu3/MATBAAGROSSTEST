@@ -200,7 +200,7 @@ export async function POST(request: Request) {
     // Stock validation and order creation in a transaction
     const order = await prisma.$transaction(async (tx) => {
       const settings = await tx.storeSettings.findFirst({
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         select: { shippingFee: true, freeShippingThreshold: true },
       });
 
@@ -304,34 +304,51 @@ export async function POST(request: Request) {
       });
 
       // 3. Update stock for each item
-      for (const item of items) {
-        const product = productsWithStock.find((p) => p.id === item.productId);
-        if (!product) continue;
+      // IMPORTANT: For CARD payments, we keep the order in AWAITING_PAYMENT and DO NOT decrement stock here.
+      // Stock will be decremented only when PayTR callback confirms payment success.
+      if (resolvedPaymentMethod !== 'CARD') {
+        for (const item of items) {
+          const product = productsWithStock.find((p) => p.id === item.productId);
+          if (!product) continue;
 
-        const requestedQuantity = Math.max(1, Math.floor(Number(item.quantity) || 0));
-        
-        // Check if item has variant selected
-        const options = item.options as Record<string, any> | undefined;
-        const selectedVariantId = options?.variantId;
-        const selectedVariantName = options?.variantName;
-        
-        if (selectedVariantId || selectedVariantName) {
-          // Update variant stock
-          const variant = product.variants.find(
-            (v) => v.id === selectedVariantId || v.name === selectedVariantName
-          );
-          
-          if (variant) {
-            await tx.productVariant.update({
-              where: { id: variant.id },
-              data: {
-                stock: {
-                  decrement: requestedQuantity,
+          const requestedQuantity = Math.max(1, Math.floor(Number(item.quantity) || 0));
+
+          // Check if item has variant selected
+          const options = item.options as Record<string, any> | undefined;
+          const selectedVariantId = options?.variantId;
+          const selectedVariantName = options?.variantName;
+
+          if (selectedVariantId || selectedVariantName) {
+            // Update variant stock
+            const variant = product.variants.find(
+              (v) => v.id === selectedVariantId || v.name === selectedVariantName
+            );
+
+            if (variant) {
+              await tx.productVariant.update({
+                where: { id: variant.id },
+                data: {
+                  stock: {
+                    decrement: requestedQuantity,
+                  },
                 },
-              },
-            });
-            
-            // Also update main product stock if needed
+              });
+
+              // Also update main product stock if needed
+              await tx.product.update({
+                where: { id: item.productId },
+                data: {
+                  stock: {
+                    decrement: requestedQuantity,
+                  },
+                  stockQuantity: {
+                    decrement: requestedQuantity,
+                  },
+                },
+              });
+            }
+          } else {
+            // Update main product stock
             await tx.product.update({
               where: { id: item.productId },
               data: {
@@ -344,19 +361,6 @@ export async function POST(request: Request) {
               },
             });
           }
-        } else {
-          // Update main product stock
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: {
-                decrement: requestedQuantity,
-              },
-              stockQuantity: {
-                decrement: requestedQuantity,
-              },
-            },
-          });
         }
       }
 

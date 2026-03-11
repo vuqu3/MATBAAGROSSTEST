@@ -58,6 +58,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         data: { status: PremiumQuoteRequestStatus.QUOTED },
       });
 
+      await tx.premiumQuoteOffer.updateMany({
+        where: {
+          requestId: offerUpdated.requestId,
+          id: { not: offerUpdated.id },
+          status: { notIn: [PremiumQuoteOfferStatus.REJECTED] },
+        },
+        data: { status: PremiumQuoteOfferStatus.REJECTED },
+      });
+
       return offerUpdated;
     });
 

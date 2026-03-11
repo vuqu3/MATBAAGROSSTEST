@@ -5,6 +5,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Edit, Trash2, AlertTriangle, CheckCircle, MinusCircle, ChevronDown, ChevronRight } from 'lucide-react';
 
+type SellerMeVendor = {
+  id: string;
+  isBlocked: boolean;
+  canAddRetailProducts: boolean;
+};
+
 type Product = {
   id: string;
   name: string;
@@ -56,8 +62,37 @@ export default function SellerProductsPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [vendorLoading, setVendorLoading] = useState(true);
+  const [vendor, setVendor] = useState<SellerMeVendor | null>(null);
+  const [vendorError, setVendorError] = useState<string | null>(null);
 
   useEffect(() => {
+    setVendorLoading(true);
+    setVendorError(null);
+    fetch('/api/seller/me')
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        setVendor((data?.vendor ?? null) as SellerMeVendor | null);
+      })
+      .catch(() => setVendorError('Yetkileriniz doğrulanamadı. Lütfen tekrar deneyin.'))
+      .finally(() => setVendorLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (vendorLoading) return;
+    if (!vendor || vendorError) {
+      setLoading(false);
+      setProducts([]);
+      setTotal(0);
+      return;
+    }
+    if (vendor.isBlocked || !vendor.canAddRetailProducts) {
+      setLoading(false);
+      setProducts([]);
+      setTotal(0);
+      return;
+    }
+
     setLoading(true);
     fetch(`/api/seller/products?page=${page}&pageSize=10`)
       .then((res) => res.ok ? res.json() : { products: [], total: 0 })
@@ -67,7 +102,7 @@ export default function SellerProductsPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [page]);
+  }, [page, vendorLoading, vendor, vendorError]);
 
   const toggleRowExpansion = (productId: string) => {
     setExpandedRows((prev) => {
@@ -112,7 +147,32 @@ export default function SellerProductsPage() {
     <div>
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Ürünlerim</h1>
 
-      {loading ? (
+      {vendorLoading ? (
+        <div className="text-slate-500 py-8">Yükleniyor...</div>
+      ) : vendorError || !vendor ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">
+          {vendorError ?? 'Yetkileriniz doğrulanamadı.'}
+        </div>
+      ) : vendor.isBlocked ? (
+        <div className="min-h-[50vh] flex items-center justify-center">
+          <div className="w-full max-w-3xl rounded-2xl border border-red-200 bg-gradient-to-br from-red-50 to-orange-50 p-8 shadow-sm">
+            <h2 className="text-xl font-semibold text-gray-900">Hesabınız Engellendi</h2>
+            <p className="mt-2 text-gray-700 leading-relaxed">
+              Satıcı hesabınız şu anda kısıtlı durumdadır. Detaylı bilgi için lütfen destek ekibimizle iletişime geçiniz.
+            </p>
+          </div>
+        </div>
+      ) : !vendor.canAddRetailProducts ? (
+        <div className="min-h-[50vh] flex items-center justify-center">
+          <div className="w-full max-w-3xl rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-8 shadow-sm">
+            <h2 className="text-xl font-semibold text-gray-900">Perakende Ürün Modülü Kapalı</h2>
+            <p className="mt-2 text-gray-700 leading-relaxed">
+              Matbaagross Premium Üretici modeline geçiş sürecindeyiz. Mevcut yetkilerinizle sadece Premium Havuzdaki taleplere teklif verebilirsiniz. Sisteme perakende ürün yüklemek ve Türkiye geneline satış yapmak için lütfen destek@matbaagross.com adresi üzerinden ekibimizle iletişime geçiniz.
+            </p>
+          </div>
+        </div>
+      ) : (
+      loading ? (
         <div className="text-slate-500 py-8">Yükleniyor...</div>
       ) : products.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">
@@ -307,7 +367,7 @@ export default function SellerProductsPage() {
             </div>
           )}
         </>
-      )}
+      ))}
     </div>
   );
 }

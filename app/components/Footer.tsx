@@ -161,14 +161,25 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
             {/* İletişim Bilgileri */}
             <div className="space-y-3">
               <Link
-                href="/seller-login"
+                href="https://fabrika.matbaagross.com/seller-login"
                 className="inline-block text-sm font-medium text-[#f97316] hover:text-[#ea580c] transition-colors"
               >
                 MatbaaGross Seller
               </Link>
+              <Link
+                href="/tedarikci-ol"
+                className="inline-block text-sm font-medium text-[#f97316] hover:text-[#ea580c] transition-colors"
+              >
+                Premium Üretici Olun
+              </Link>
               <div className="flex items-center gap-3 text-sm text-gray-300">
                 <Phone className="w-4 h-4 text-[#f97316]" />
-                <span>Yakında eklenecektir</span>
+                <a 
+                  href="tel:+905333683909"
+                  className="hover:text-[#f97316] transition-colors"
+                >
+                  +90 533 368 39 09
+                </a>
               </div>
               <div className="flex items-center gap-3 text-sm text-gray-300">
                 <Mail className="w-4 h-4 text-[#f97316]" />
@@ -299,7 +310,7 @@ export default function Footer({ hideRetailBadges }: FooterProps = {}) {
           {/* Kurumsal Giriş — gizli, sadece satıcılar için */}
           <div className="mt-6 pt-4 border-t border-gray-700/50 text-center">
             <Link
-              href="/seller-login"
+              href="https://fabrika.matbaagross.com/seller-login"
               className="text-[11px] text-gray-600 hover:text-gray-400 transition-colors"
             >
               Kurumsal Giriş

@@ -55,7 +55,7 @@ export default function MakineIlanVerPage() {
 
       if (response.ok) {
         alert('Makine ilanınız başarıyla oluşturuldu!');
-        router.push('/seller-dashboard/makine-ilanlarim');
+        router.push('/seller-dashboard/makine-pazari');
       } else {
         alert('İlan oluşturulurken bir hata oluştu.');
       }

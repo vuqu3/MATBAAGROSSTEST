@@ -95,10 +95,21 @@ export async function PATCH(
       }
     }
 
-    if (product.productType === 'READY') {
+    const effectiveProductType = (body.productType && ['READY', 'CUSTOM'].includes(String(body.productType)))
+      ? String(body.productType) as 'READY' | 'CUSTOM'
+      : product.productType;
+    if (body.productType && effectiveProductType !== product.productType) {
+      data.productType = effectiveProductType;
+    }
+
+    if (effectiveProductType === 'READY') {
       data.stock = validStock;
       data.stockQuantity = validStock;
+      data.minOrderQuantity = null;
+      data.productionDays = null;
     } else {
+      data.stock = 0;
+      data.stockQuantity = null;
       if (body.minOrderQuantity !== undefined) data.minOrderQuantity = body.minOrderQuantity != null ? parseInt(String(body.minOrderQuantity), 10) : null;
       if (body.productionDays !== undefined) data.productionDays = body.productionDays != null ? parseInt(String(body.productionDays), 10) : null;
     }

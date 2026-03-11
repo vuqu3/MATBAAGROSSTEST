@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Box, Paintbrush, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 export type ProductAttributeOption = { label: string; priceImpact: number };
@@ -66,7 +66,7 @@ type Product = {
   relatedProducts?: string[] | null;
 };
 
-type Category = { id: string; name: string; slug: string; children?: { id: string; name: string; slug: string }[] };
+type Category = { id: string; name: string; slug: string; parentId?: string | null; children?: { id: string; name: string; slug: string }[] };
 
 export default function ProductEditForm({ product }: { product: Product }) {
   const router = useRouter();
@@ -75,6 +75,8 @@ export default function ProductEditForm({ product }: { product: Product }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [imageUploading, setImageUploading] = useState(false);
+  const [productType, setProductTypeState] = useState<'READY' | 'CUSTOM'>(product.productType === 'CUSTOM' ? 'CUSTOM' : 'READY');
+  const [brandCategoryId, setBrandCategoryId] = useState<string | null>(null);
 
   const initialAttributes = useMemo((): ProductAttribute[] => {
     const a = product.attributes;
@@ -105,7 +107,7 @@ export default function ProductEditForm({ product }: { product: Product }) {
     setRelatedProductIds(Array.isArray(product.relatedProducts) ? product.relatedProducts : []);
   }, [product.id, initialAttributes, product.vendorName, product.images, product.imageUrl, product.highlights, product.descriptionDetail, product.relatedProducts]);
 
-  const isReadyStock = product.productType === 'READY';
+  const isReadyStock = productType === 'READY';
   const stockValue = product.stockQuantity ?? product.stock ?? 0;
 
   const {
@@ -139,12 +141,23 @@ export default function ProductEditForm({ product }: { product: Product }) {
   useEffect(() => {
     fetch('/api/categories')
       .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        setCategories(Array.isArray(data) ? data : []);
+      .then((data: Category[]) => {
+        const flat = Array.isArray(data) ? data : [];
+        setCategories(flat);
+        const found = flat.find((c) => c.slug === 'markaniza-ozel-uretim')
+          ?? flat.flatMap((c) => (c.children ?? [])).find((c) => c.slug === 'markaniza-ozel-uretim');
+        if (found) setBrandCategoryId(found.id);
       })
       .catch(() => setCategories([]))
       .finally(() => setLoading(false));
   }, []);
+
+  /* Auto-set category when switching to CUSTOM */
+  useEffect(() => {
+    if (productType === 'CUSTOM' && brandCategoryId) {
+      setValue('categoryId', brandCategoryId);
+    }
+  }, [productType, brandCategoryId, setValue]);
 
   const onSubmit = async (data: FormData) => {
     setError('');
@@ -160,16 +173,17 @@ export default function ProductEditForm({ product }: { product: Product }) {
         description: data.description || null,
         imageUrl: imageUrls[0] || data.imageUrl?.trim() || null,
         categoryId: data.categoryId,
-        basePrice: data.basePrice,
-        buyPrice: data.buyPrice ?? null,
-        salePrice: data.salePrice ?? null,
-        compareAtPrice: data.compareAtPrice ?? null,
-        taxRate: data.taxRate,
+        productType,
+        basePrice: productType === 'CUSTOM' ? 0 : (parseFloat(String(data.basePrice)) || 0),
+        buyPrice: data.buyPrice != null ? parseFloat(String(data.buyPrice)) : null,
+        salePrice: data.salePrice != null ? parseFloat(String(data.salePrice)) : null,
+        compareAtPrice: data.compareAtPrice != null ? parseFloat(String(data.compareAtPrice)) : null,
+        taxRate: parseFloat(String(data.taxRate)) || 20,
         supplier: data.supplier || null,
-        stock: stockNum,
-        stockQuantity: stockNum,
-        minOrderQuantity: data.minOrderQuantity ?? null,
-        productionDays: data.productionDays ?? null,
+        stock: isReadyStock ? stockNum : undefined,
+        stockQuantity: isReadyStock ? stockNum : undefined,
+        minOrderQuantity: !isReadyStock ? (data.minOrderQuantity ?? null) : null,
+        productionDays: !isReadyStock ? (data.productionDays ?? null) : null,
         isPublished: data.isPublished,
         isActive: data.isActive,
         attributes: productAttributes.length > 0 ? productAttributes : null,
@@ -201,13 +215,41 @@ export default function ProductEditForm({ product }: { product: Product }) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-lg shadow p-6 space-y-6">
       <div className="flex items-center gap-4 mb-6">
-        <Link
-          href="/admin/products"
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-        >
+        <Link href="/admin/products" className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
           <ArrowLeft size={20} />
           Listeye Dön
         </Link>
+      </div>
+
+      {/* Ürün Tipi */}
+      <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+        <p className="text-sm font-semibold text-gray-700 mb-3">Ürün Tipi</p>
+        <div className="grid grid-cols-2 gap-3">
+          <label className={`flex items-start gap-3 p-3 border-2 rounded-xl cursor-pointer transition-all ${
+            productType === 'READY' ? 'border-[#FF6000] bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+          }`}>
+            <input type="radio" name="ptEdit" value="READY" checked={productType === 'READY'}
+              onChange={() => setProductTypeState('READY')} className="mt-0.5 h-4 w-4 text-[#FF6000]" />
+            <div>
+              <div className="flex items-center gap-1.5 font-semibold text-sm text-gray-900">
+                <Box className="h-4 w-4 text-[#FF6000]" /> Hazır Stok (Perakende)
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">Fiyat + stok ile normal e-ticaret.</p>
+            </div>
+          </label>
+          <label className={`flex items-start gap-3 p-3 border-2 rounded-xl cursor-pointer transition-all ${
+            productType === 'CUSTOM' ? 'border-[#FF6000] bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+          }`}>
+            <input type="radio" name="ptEdit" value="CUSTOM" checked={productType === 'CUSTOM'}
+              onChange={() => setProductTypeState('CUSTOM')} className="mt-0.5 h-4 w-4 text-[#FF6000]" />
+            <div>
+              <div className="flex items-center gap-1.5 font-semibold text-sm text-gray-900">
+                <Paintbrush className="h-4 w-4 text-[#FF6000]" /> Özel Baskılı (Premium)
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">Teklif usulü, fiyat gizli.</p>
+            </div>
+          </label>
+        </div>
       </div>
 
       {error && (
@@ -279,67 +321,81 @@ export default function ProductEditForm({ product }: { product: Product }) {
           className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000] disabled:bg-gray-100"
         >
           <option value="">{loading ? 'Yükleniyor...' : 'Kategori Seçin'}</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-          {categories.flatMap((c) =>
-            (c.children || []).map((ch) => (
-              <option key={ch.id} value={ch.id}>— {c.name} › {ch.name}</option>
-            ))
-          )}
+          {categories
+            .filter((c) => !c.parentId)
+            .flatMap((parent) => [
+              <option key={parent.id} value={parent.id}>
+                {parent.name}
+              </option>,
+              ...(parent.children ?? []).map((child) => (
+                <option key={child.id} value={child.id}>
+                  {'  └ '}{child.name}
+                </option>
+              )),
+            ])
+          }
         </select>
         {errors.categoryId && <p className="mt-1 text-sm text-red-600">{errors.categoryId.message}</p>}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Taban Fiyat (TL) *</label>
-          <input {...register('basePrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
-          {errors.basePrice && <p className="mt-1 text-sm text-red-600">{errors.basePrice.message}</p>}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Satış Fiyatı (TL)</label>
-          <input {...register('salePrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Piyasa Fiyatı (İndirimsiz)</label>
-          <input {...register('compareAtPrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" placeholder="İsteğe bağlı" />
-          <p className="mt-1 text-xs text-gray-500">Satış fiyatından yüksek girerseniz indirim gösterilir.</p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Alış/Maliyet (TL)</label>
-          <input {...register('buyPrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">KDV (%)</label>
-          <input {...register('taxRate', { valueAsNumber: true })} type="number" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi</label>
-          <input {...register('supplier')} type="text" className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
-        </div>
-      </div>
-
+      {/* Fiyatlandırma — sadece READY */}
       {isReadyStock && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Stok Adedi</label>
-          <input {...register('stock', { valueAsNumber: true })} type="number" min={0} className="w-full max-w-xs px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
-          {errors.stock && <p className="mt-1 text-sm text-red-600">{errors.stock.message}</p>}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Taban Fiyat (TL) *</label>
+              <input {...register('basePrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+              {errors.basePrice && <p className="mt-1 text-sm text-red-600">{errors.basePrice.message}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Satış Fiyatı (TL)</label>
+              <input {...register('salePrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Piyasa Fiyatı</label>
+              <input {...register('compareAtPrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" placeholder="İsteğe bağlı" />
+              <p className="mt-1 text-xs text-gray-500">Yüksek girerseniz indirim gösterilir.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Alış/Maliyet (TL)</label>
+              <input {...register('buyPrice', { valueAsNumber: true })} type="number" step="0.01" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">KDV (%)</label>
+              <input {...register('taxRate', { valueAsNumber: true })} type="number" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Stok Adedi</label>
+              <input {...register('stock', { valueAsNumber: true })} type="number" min={0} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+              {errors.stock && <p className="mt-1 text-sm text-red-600">{errors.stock.message}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi</label>
+              <input {...register('supplier')} type="text" className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+            </div>
+          </div>
+        </>
       )}
 
+      {/* Üretim bilgileri — sadece CUSTOM */}
       {!isReadyStock && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Min. Sipariş Adedi</label>
-            <input {...register('minOrderQuantity', { valueAsNumber: true })} type="number" min={1} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-4">
+          <p className="text-sm font-semibold text-amber-800">Üretim Bilgileri (Özel Baskı)</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Min. Sipariş Adedi</label>
+              <input {...register('minOrderQuantity', { valueAsNumber: true })} type="number" min={1} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Üretim Süresi (Gün)</label>
+              <input {...register('productionDays', { valueAsNumber: true })} type="number" min={1} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Üretim Süresi (Gün)</label>
-            <input {...register('productionDays', { valueAsNumber: true })} type="number" min={1} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi</label>
+            <input {...register('supplier')} type="text" className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6000]" />
           </div>
         </div>
       )}

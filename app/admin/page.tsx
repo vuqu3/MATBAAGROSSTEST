@@ -1,10 +1,14 @@
 import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import StatCard from './components/StatCard';
 import DashboardCharts from './components/DashboardCharts';
+import TestDataCleanupButton from './components/TestDataCleanupButton';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 function formatTRY(n: number) {
   return new Intl.NumberFormat('tr-TR', {
@@ -22,10 +26,29 @@ function sparkData(base: number) {
 }
 
 export default async function AdminDashboard() {
+  const cookieStore = await cookies();
+  const cookieNames = cookieStore.getAll().map((c) => c.name);
   const session = await auth();
 
-  if (!session || session.user.role !== 'ADMIN') {
-    redirect('/admin/login');
+  console.log('[admin/page] cookieNames:', cookieNames);
+  console.log('[admin/page] session:', JSON.stringify(session?.user ?? null));
+
+  if (!session?.user?.id) {
+    return (
+      <div className="p-10 text-red-500 text-2xl font-bold">
+        DİKKAT: Session okunamadı! Proxy veya Cookie hatası.
+        <br />
+        <span className="text-lg">Gelen Çerezler: {JSON.stringify(cookieNames)}</span>
+      </div>
+    );
+  }
+
+  if (String(session.user.role ?? '').toUpperCase() !== 'ADMIN') {
+    return (
+      <div className="p-10 text-red-500 text-2xl font-bold">
+        DİKKAT: Rol uyumsuz. Mevcut Rol: {String(session.user.role ?? 'YOK')}
+      </div>
+    );
   }
 
   const now = new Date();
@@ -100,6 +123,18 @@ export default async function AdminDashboard() {
         <p className="mt-0.5 text-sm text-slate-500">
           Genel bakış ve anahtar performans göstergeleri
         </p>
+      </div>
+
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-extrabold text-red-800">Canlıya çıkış öncesi temizlik</p>
+            <p className="mt-0.5 text-xs font-semibold text-red-700">
+              Siparişler / teklifler / mesajlar silinir. Ürünler ve kullanıcılar silinmez.
+            </p>
+          </div>
+          <TestDataCleanupButton />
+        </div>
       </div>
 
       {/* 4 büyük istatistik kartı */}

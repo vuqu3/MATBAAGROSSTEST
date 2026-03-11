@@ -8,11 +8,17 @@ type Vendor = {
   id: string;
   name: string;
   slug: string;
-  commissionRate: number;
   balance: number;
   isBlocked: boolean;
+  canAddRetailProducts: boolean;
+  subscriptionStatus?: string | null;
+  subscriptionEndsAt?: string | null;
   createdAt: Date;
   updatedAt: Date;
+  profile?: {
+    rating: number;
+    completedJobs: number;
+  } | null;
   owner: {
     id: string;
     email: string;
@@ -33,12 +39,14 @@ export default function VendorEditClient({ vendor }: { vendor: Vendor }) {
   // Form state
   const [formData, setFormData] = useState({
     vendorName: vendor.name,
-    commissionRate: vendor.commissionRate,
     isBlocked: vendor.isBlocked,
+    canAddRetailProducts: vendor.canAddRetailProducts,
     userName: vendor.owner?.name || '',
     userPhone: vendor.owner?.phoneNumber || '',
     userTaxOffice: vendor.owner?.taxOffice || '',
     userTaxNumber: vendor.owner?.taxNumber || '',
+    rating: typeof vendor.profile?.rating === 'number' ? String(vendor.profile.rating) : '5.0',
+    completedJobs: typeof vendor.profile?.completedJobs === 'number' ? String(vendor.profile.completedJobs) : '0',
     newPassword: '',
     confirmPassword: '',
   });
@@ -80,12 +88,14 @@ export default function VendorEditClient({ vendor }: { vendor: Vendor }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           vendorName: formData.vendorName,
-          commissionRate: formData.commissionRate,
           isBlocked: formData.isBlocked,
+          canAddRetailProducts: formData.canAddRetailProducts,
           userName: formData.userName,
           userPhone: formData.userPhone,
           userTaxOffice: formData.userTaxOffice,
           userTaxNumber: formData.userTaxNumber,
+          rating: formData.rating !== '' ? Number(formData.rating) : undefined,
+          completedJobs: formData.completedJobs !== '' ? Number(formData.completedJobs) : undefined,
           newPassword: formData.newPassword || undefined,
         }),
       });
@@ -164,21 +174,33 @@ export default function VendorEditClient({ vendor }: { vendor: Vendor }) {
                   required
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Komisyon Oranı (%)
+                  Mağaza Puanı (Örn: 4.8 veya 5.0)
                 </label>
                 <input
                   type="number"
-                  name="commissionRate"
-                  value={formData.commissionRate}
+                  step="0.1"
+                  name="rating"
+                  value={formData.rating}
                   onChange={handleInputChange}
-                  min="0"
-                  max="100"
-                  step="0.5"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  required
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Başarılı İş Sayısı (Örn: 120)
+                </label>
+                <input
+                  type="number"
+                  name="completedJobs"
+                  value={formData.completedJobs}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
             </div>
@@ -194,6 +216,22 @@ export default function VendorEditClient({ vendor }: { vendor: Vendor }) {
                 />
                 <span className="text-sm font-medium text-slate-700">Satıcıyı Engelle</span>
               </label>
+            </div>
+
+            <div className="mt-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="canAddRetailProducts"
+                  checked={formData.canAddRetailProducts}
+                  onChange={handleInputChange}
+                  className="rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                />
+                <span className="text-sm font-medium text-slate-700">Ürün Yükleme Yetkisi (Perakende)</span>
+              </label>
+              <p className="mt-1 text-xs text-slate-500">
+                Kapalıysa satıcı sadece Premium Havuzdaki taleplere teklif verebilir.
+              </p>
             </div>
           </div>
 

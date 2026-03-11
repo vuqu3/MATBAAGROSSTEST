@@ -6,6 +6,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { AlertCircle, Upload, Loader2, X, Plus, Trash2 } from 'lucide-react';
 
+type SellerMeVendor = {
+  id: string;
+  isBlocked: boolean;
+  canAddRetailProducts: boolean;
+};
+
 const MAX_IMAGES = 5;
 type ImageItem = File | string; // string = URL (mevcut yükleme)
 
@@ -33,12 +39,27 @@ export default function SellerNewProductPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryTree, setCategoryTree] = useState<CategoryNode[]>([]);
   const [loading, setLoading] = useState(true);
+  const [vendorLoading, setVendorLoading] = useState(true);
+  const [vendor, setVendor] = useState<SellerMeVendor | null>(null);
+  const [vendorError, setVendorError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<ImageItem[]>([]);
+
+  useEffect(() => {
+    setVendorLoading(true);
+    setVendorError(null);
+    fetch('/api/seller/me')
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        setVendor((data?.vendor ?? null) as SellerMeVendor | null);
+      })
+      .catch(() => setVendorError('Yetkileriniz doğrulanamadı. Lütfen tekrar deneyin.'))
+      .finally(() => setVendorLoading(false));
+  }, []);
 
   type VariantRow = { id: string; name: string; price: string; stock: string; sku: string };
   const [variants, setVariants] = useState<VariantRow[]>([]);
@@ -138,6 +159,16 @@ export default function SellerNewProductPage() {
   };
 
   useEffect(() => {
+    if (vendorLoading) return;
+    if (!vendor || vendorError) {
+      setLoading(false);
+      return;
+    }
+    if (vendor.isBlocked || !vendor.canAddRetailProducts) {
+      setLoading(false);
+      return;
+    }
+
     fetch('/api/seller/categories')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
@@ -158,7 +189,7 @@ export default function SellerNewProductPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [vendorLoading, vendor, vendorError]);
 
   // Auto-calculate desi when dimensions change
   useEffect(() => {
@@ -375,6 +406,48 @@ export default function SellerNewProductPage() {
       setUploadError('Bir ürün için en fazla 5 görsel yükleyebilirsiniz.');
     }
   }, [images.length]);
+
+  if (vendorLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-gray-500">Yükleniyor...</div>
+      </div>
+    );
+  }
+
+  if (vendorError || !vendor) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">
+        {vendorError ?? 'Yetkileriniz doğrulanamadı.'}
+      </div>
+    );
+  }
+
+  if (vendor.isBlocked) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <div className="w-full max-w-3xl rounded-2xl border border-red-200 bg-gradient-to-br from-red-50 to-orange-50 p-8 shadow-sm">
+          <h1 className="text-xl font-semibold text-gray-900">Hesabınız Engellendi</h1>
+          <p className="mt-2 text-gray-700 leading-relaxed">
+            Satıcı hesabınız şu anda kısıtlı durumdadır. Detaylı bilgi için lütfen destek ekibimizle iletişime geçiniz.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!vendor.canAddRetailProducts) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <div className="w-full max-w-3xl rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-8 shadow-sm">
+          <h1 className="text-xl font-semibold text-gray-900">Perakende Ürün Modülü Kapalı</h1>
+          <p className="mt-2 text-gray-700 leading-relaxed">
+            Matbaagross Premium Üretici modeline geçiş sürecindeyiz. Mevcut yetkilerinizle sadece Premium Havuzdaki taleplere teklif verebilirsiniz. Sisteme perakende ürün yüklemek ve Türkiye geneline satış yapmak için lütfen destek@matbaagross.com adresi üzerinden ekibimizle iletişime geçiniz.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
 import { SupplierApplicationStatus } from '@prisma/client';
 
 export async function POST(
@@ -15,12 +14,8 @@ export async function POST(
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const { password, sendEmail } = body;
-
-    if (!password || password.length < 6) {
-      return NextResponse.json({ error: 'Şifre en az 6 karakter olmalıdır' }, { status: 400 });
-    }
+    const body = await request.json().catch(() => ({}));
+    const { sendEmail } = body as { sendEmail?: boolean };
 
     // Başvuruyu getir
     const application = await prisma.supplierApplication.findUnique({
@@ -31,52 +26,63 @@ export async function POST(
       return NextResponse.json({ error: 'Başvuru bulunamadı' }, { status: 404 });
     }
 
-    if (application.status !== SupplierApplicationStatus.PENDING) {
-      return NextResponse.json({ error: 'Bu başvuru zaten işleme alınmış' }, { status: 400 });
+    if (![SupplierApplicationStatus.PENDING, SupplierApplicationStatus.REVIEWED, SupplierApplicationStatus.APPROVED].includes(application.status)) {
+      return NextResponse.json({ error: 'Başvuru durumu uygun değil' }, { status: 400 });
     }
 
     // Email'in zaten kullanılıp kullanılmadığını kontrol et
-    const existingUser = await prisma.user.findUnique({
-      where: { email: application.email },
-    });
+    const existingUser = await prisma.user.findUnique({ where: { email: application.email } });
 
-    if (existingUser) {
-      return NextResponse.json({ error: 'Bu e-posta adresi zaten kullanılıyor' }, { status: 400 });
+    if (!existingUser) {
+      return NextResponse.json(
+        { error: 'Satıcı kullanıcı hesabı bulunamadı. Üretici önce kayıt olmalı.' },
+        { status: 400 }
+      );
     }
 
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // User ve Vendor kayıtlarını oluştur (transaction içinde)
+    // User + Vendor kayıtlarını oluştur (transaction içinde)
     const result = await prisma.$transaction(async (tx) => {
-      // User oluştur
-      const user = await tx.user.create({
+      const now = new Date();
+      const trialEndsAt = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+
+      const user = await tx.user.update({
+        where: { id: existingUser.id },
         data: {
-          email: application.email,
-          password: hashedPassword,
-          name: application.contactName,
           role: 'SELLER',
           userType: 'CORPORATE',
           companyName: application.companyName,
           phoneNumber: application.phone,
+          taxNumber: application.taxNumber,
+          applicationStatus: 'APPROVED',
         },
       });
 
-      // Vendor oluştur
-      const vendor = await tx.vendor.create({
-        data: {
-          name: application.companyName,
-          slug: application.companyName
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/-+/g, '-')
-            .trim(),
-          ownerId: user.id,
-        },
-      });
+      const existingVendor = await tx.vendor.findUnique({ where: { ownerId: user.id } });
+      const vendor = existingVendor
+        ? await tx.vendor.update({
+            where: { id: existingVendor.id },
+            data: {
+              commissionRate: 0,
+              subscriptionStatus: 'TRIAL',
+              subscriptionEndsAt: trialEndsAt,
+            } as any,
+          })
+        : await tx.vendor.create({
+            data: {
+              name: application.companyName,
+              slug: application.companyName
+                .toLowerCase()
+                .replace(/[^a-z0-9\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .trim(),
+              ownerId: user.id,
+              commissionRate: 0,
+              subscriptionStatus: 'TRIAL',
+              subscriptionEndsAt: trialEndsAt,
+            },
+          });
 
-      // Başvuru durumunu güncelle
       await tx.supplierApplication.update({
         where: { id },
         data: { status: SupplierApplicationStatus.APPROVED },
@@ -89,11 +95,10 @@ export async function POST(
     if (sendEmail) {
       try {
         // TODO: Implement email sending functionality
-        // await sendSupplierWelcomeEmail(application.email, password, application.companyName);
+        // await sendSupplierWelcomeEmail(application.email, application.companyName);
         console.log('E-posta gönderilecek:', {
           to: application.email,
           company: application.companyName,
-          password,
         });
       } catch (emailError) {
         console.error('E-posta gönderme hatası:', emailError);

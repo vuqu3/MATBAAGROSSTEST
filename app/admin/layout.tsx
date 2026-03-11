@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -15,15 +17,24 @@ export default function AdminLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const userRole = String(session?.user?.role ?? '').toUpperCase();
 
   useEffect(() => {
     if (pathname === '/admin/login') return;
+
     if (status === 'unauthenticated') {
-      router.push('/admin/login');
-    } else if (status === 'authenticated' && session?.user?.role !== 'ADMIN') {
-      router.push('/');
+      router.replace('/admin/login');
+      return;
     }
-  }, [status, session, router, pathname]);
+
+    if (status === 'authenticated' && userRole && userRole !== 'ADMIN') {
+      if (userRole === 'SELLER') {
+        window.location.href = 'https://fabrika.matbaagross.com/seller-dashboard';
+        return;
+      }
+      router.replace('/');
+    }
+  }, [status, router, pathname, userRole]);
 
   if (pathname === '/admin/login') {
     return <>{children}</>;
@@ -37,7 +48,11 @@ export default function AdminLayout({
     );
   }
 
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!session) {
+    return null;
+  }
+
+  if (userRole !== 'ADMIN') {
     return null;
   }
 

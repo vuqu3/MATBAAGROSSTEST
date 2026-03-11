@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Package, Clock, CreditCard, Landmark, CheckCircle } from 'lucide-react';
+import { Inbox, FileCheck, BadgeCheck, TrendingUp } from 'lucide-react';
 
 function formatTRY(n: number) {
   return new Intl.NumberFormat('tr-TR', {
@@ -26,6 +26,10 @@ type OverviewData = {
   completedOrders?: number;
   pendingOrders: number;
   pendingProducts: number;
+  totalRfqRequests?: number;
+  quotedRequests?: number;
+  approvedRequests?: number;
+  rfqRevenue?: number;
   chartData?: { date: string; total: number }[];
   recentOrders?: { id: string; barcode: string | null; status: string; totalPrice: number; createdAt: string }[];
 };
@@ -79,46 +83,36 @@ export default function SellerOverviewPage() {
 
   const stats = [
     {
-      title: 'Toplam Satış (TL)',
-      value: formatTRY(data?.totalSales ?? 0),
-      icon: ShoppingCart,
+      title: 'Toplam Talepler',
+      subtitle: 'Açık RFQ havuzu',
+      value: String(data?.totalRfqRequests ?? 0),
+      icon: Inbox,
+      color: 'bg-blue-600',
+      href: '/seller-dashboard/teklif-havuzu',
+    },
+    {
+      title: 'Teklif Verilen İşler',
+      subtitle: 'Aktif teklifleriniz',
+      value: String(data?.quotedRequests ?? 0),
+      icon: FileCheck,
       color: 'bg-orange-500',
-      href: '/seller-dashboard/orders',
+      href: '/seller-dashboard/verilen-teklifler',
     },
     {
-      title: 'Kredi Kartı Satışları',
-      value: formatTRY(data?.cardSales ?? 0),
-      icon: CreditCard,
-      color: 'bg-slate-700',
-      href: '/seller-dashboard/orders',
-    },
-    {
-      title: 'Havale / EFT Satışları',
-      value: formatTRY(data?.bankTransferSales ?? 0),
-      icon: Landmark,
+      title: 'Onaylanan İşler',
+      subtitle: 'Müşteri onaylı',
+      value: String(data?.approvedRequests ?? 0),
+      icon: BadgeCheck,
       color: 'bg-emerald-600',
-      href: '/seller-dashboard/orders',
+      href: '/seller-dashboard/onaylanan-teklifler',
     },
     {
-      title: 'Bekleyen Siparişler',
-      value: String(data?.pendingOrders ?? 0),
-      icon: Package,
-      color: 'bg-blue-500',
-      href: '/seller-dashboard/orders',
-    },
-    {
-      title: 'Tamamlanan Siparişler',
-      value: String(data?.completedOrders ?? 0),
-      icon: CheckCircle,
-      color: 'bg-emerald-500',
-      href: '/seller-dashboard/orders',
-    },
-    {
-      title: 'Onay Bekleyen Ürünler',
-      value: String(data?.pendingProducts ?? 0),
-      icon: Clock,
-      color: 'bg-amber-500',
-      href: '/seller-dashboard/products',
+      title: 'Toplam Ciro',
+      subtitle: 'Onaylanan işlerden',
+      value: formatTRY(data?.rfqRevenue ?? 0),
+      icon: TrendingUp,
+      color: 'bg-violet-600',
+      href: '/seller-dashboard/onaylanan-teklifler',
     },
   ];
 
@@ -138,7 +132,8 @@ export default function SellerOverviewPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">{s.title}</p>
-                  <p className="mt-1 text-xl font-bold text-gray-800">{s.value}</p>
+                  <p className="mt-1 text-2xl font-bold text-gray-800">{s.value}</p>
+                  {'subtitle' in s && <p className="mt-0.5 text-xs text-gray-400">{(s as any).subtitle}</p>}
                 </div>
                 <div className={`rounded-lg p-2.5 ${s.color} text-white`}>
                   <Icon className="h-5 w-5" />

@@ -25,6 +25,7 @@ async function getPublishedProducts(limit: number) {
       productType: true,
       stock: true,
       stockQuantity: true,
+      category: { select: { slug: true, parent: { select: { slug: true } } } },
     },
   });
   return products.map((p) => {
@@ -55,6 +56,9 @@ async function getPublishedProducts(limit: number) {
       productType: p.productType ?? undefined,
       stock: p.stock ?? undefined,
       stockQuantity: p.stockQuantity ?? undefined,
+      categorySlug: (p.category?.slug === 'markaniza-ozel-uretim' || p.category?.parent?.slug === 'markaniza-ozel-uretim')
+        ? 'markaniza-ozel-uretim'
+        : (p.category?.slug ?? undefined),
     };
   });
 }
@@ -79,6 +83,7 @@ async function getProductsForCarousel(metadata: unknown) {
         productType: true,
         stock: true,
         stockQuantity: true,
+        category: { select: { slug: true, parent: { select: { slug: true } } } },
       },
     });
 
@@ -109,6 +114,9 @@ async function getProductsForCarousel(metadata: unknown) {
         productType: p.productType ?? undefined,
         stock: p.stock ?? undefined,
         stockQuantity: p.stockQuantity ?? undefined,
+        categorySlug: (p.category?.slug === 'markaniza-ozel-uretim' || p.category?.parent?.slug === 'markaniza-ozel-uretim')
+          ? 'markaniza-ozel-uretim'
+          : (p.category?.slug ?? undefined),
       };
     });
   }
@@ -132,6 +140,7 @@ async function getProductsForCarousel(metadata: unknown) {
         productType: true,
         stock: true,
         stockQuantity: true,
+        category: { select: { slug: true, parent: { select: { slug: true } } } },
       },
     });
 
@@ -168,6 +177,9 @@ async function getProductsForCarousel(metadata: unknown) {
         productType: p.productType ?? undefined,
         stock: p.stock ?? undefined,
         stockQuantity: p.stockQuantity ?? undefined,
+        categorySlug: (p.category?.slug === 'markaniza-ozel-uretim' || p.category?.parent?.slug === 'markaniza-ozel-uretim')
+          ? 'markaniza-ozel-uretim'
+          : (p.category?.slug ?? undefined),
       };
     });
   }
@@ -176,6 +188,28 @@ async function getProductsForCarousel(metadata: unknown) {
 }
 
 export default async function Home() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        name: 'MatbaaGross',
+        url: 'https://www.matbaagross.com',
+        logo: 'https://www.matbaagross.com/matbaagross-logo.png',
+      },
+      {
+        '@type': 'WebSite',
+        name: 'MatbaaGross',
+        url: 'https://www.matbaagross.com',
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: 'https://www.matbaagross.com/urunler?ara={search_term_string}',
+          'query-input': 'required name=search_term_string',
+        },
+      },
+    ],
+  };
+
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
@@ -225,10 +259,6 @@ export default async function Home() {
         return (
           <section key={section.id} className="bg-[#f5f5f5] py-4">
             <div className="container mx-auto px-4">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold text-[#484848]">{section.title}</h2>
-              </div>
-
               <div className={`grid ${gridCols} gap-3`}>
                 {banners.map((b, idx) => {
                   const bannerBoxClass =
@@ -238,7 +268,7 @@ export default async function Home() {
 
                   const content = (
                     <div
-                      className={`relative w-full ${bannerBoxClass} rounded-xl overflow-hidden bg-slate-50 border border-gray-200`}
+                      className={`relative w-full ${bannerBoxClass} rounded-xl overflow-hidden bg-slate-50 border-2 border-[#FF6000] shadow-md transition-transform duration-300 ease-in-out group-hover:scale-[1.03] group-hover:-translate-y-1`}
                     >
                       <Image
                         src={b.imageUrl}
@@ -255,14 +285,18 @@ export default async function Home() {
                       <Link
                         key={`${section.id}-${idx}`}
                         href={b.link}
-                        className="block hover:opacity-95 transition-opacity"
+                        className="block group"
                       >
                         {content}
                       </Link>
                     );
                   }
 
-                  return <div key={`${section.id}-${idx}`}>{content}</div>;
+                  return (
+                    <div key={`${section.id}-${idx}`} className="group">
+                      {content}
+                    </div>
+                  );
                 })}
               </div>
             </div>
@@ -276,6 +310,10 @@ export default async function Home() {
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <HeroSection featuredProduct={featuredProduct} />
 
       {sectionNodes}

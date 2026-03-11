@@ -3,10 +3,11 @@
 
 generator client {
   provider = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 enum UserRole {
@@ -18,6 +19,13 @@ enum UserRole {
 enum UserType {
   INDIVIDUAL
   CORPORATE
+}
+
+enum SellerApplicationStatus {
+  PENDING_DOCS
+  IN_REVIEW
+  APPROVED
+  REJECTED
 }
 
 enum AddressType {
@@ -44,9 +52,15 @@ model User {
   role          UserRole    @default(USER)
   userType      UserType    @default(INDIVIDUAL)
   companyName   String?     // Şirket Unvanı (Kurumsal)
+  companyDetails String?    // Makine parkuru, kapasite, çalışan sayısı vb.
   taxOffice     String?     // Vergi Dairesi
   taxNumber     String?     // Vergi No
   phoneNumber   String?
+  applicationStatus SellerApplicationStatus @default(PENDING_DOCS)
+  taxPlateUrl   String?
+  tradeRegistryUrl String?
+  signatureCircularUrl String?
+  identityDocumentUrl String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   addresses     Address[]
@@ -55,6 +69,10 @@ model User {
   supportTickets  SupportTicket[]
   vendor          Vendor?   // Satıcı hesabı (bir kullanıcı en fazla bir satıcıya sahip olabilir)
   premiumQuoteRequests PremiumQuoteRequest[]
+  sentQuoteMessages QuoteMessage[] @relation("QuoteMessageSender")
+  receivedQuoteMessages QuoteMessage[] @relation("QuoteMessageReceiver")
+  sellerReviews SellerReview[]
+  disputes Dispute[]
 
   @@map("users")
 }
@@ -63,21 +81,140 @@ model Vendor {
   id              String    @id @default(cuid())
   name            String    // Örn: "Kral Ambalaj"
   slug            String    @unique
-  commissionRate  Float     @default(2.0) // Komisyon oranı (%)
+  commissionRate  Float     @default(0.0) // Komisyon oranı (%)
   balance         Float     @default(0)   // Kazanılan bakiye
   pendingBalance  Float     @default(0)
   isBlocked       Boolean   @default(false) // Satıcı engellendi mi
+  canAddRetailProducts Boolean @default(false) // Perakende ürün ekleme yetkisi
+  subscriptionStatus SubscriptionStatus @default(EXPIRED)
+  subscriptionEndsAt DateTime?
   ownerId         String    @unique
   owner           User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   bids            Bid[]     // Satıcının verdiği teklifler
   premiumQuoteOffers PremiumQuoteOffer[]
+  preferredQuoteRequests PremiumQuoteRequest[] @relation("PreferredVendor")
   machineListings MachineListing[] // Satıcının makine ilanları
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   products        Product[]
   orderItems      OrderItem[]
+  profile         SellerProfile?
+  sellerReviews   SellerReview[]
+  subscriptionPurchases SubscriptionPurchase[]
+  disputes Dispute[]
+  referenceProducts ReferenceProduct[]
 
   @@map("vendors")
+}
+
+model SellerProfile {
+  id          String @id @default(cuid())
+  vendorId    String @unique
+  vendor      Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  slug        String @unique
+  storeName   String
+  about       String?
+  address     String?
+  contactPhone String?
+  contactEmail String?
+  logoUrl     String?
+  bannerUrl   String?
+  machinePark Json?
+  showcase    Json?
+
+  rating      Float  @default(5.0)
+  completedJobs Int  @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("seller_profiles")
+}
+
+model ReferenceProduct {
+  id                 String   @id @default(cuid())
+  vendorId           String
+  vendor             Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  title              String
+  imageUrl           String?
+
+  description         String?
+
+  paperType           String?
+  paperWeight         String?
+  printDetails        String?
+
+  finishes           String[] @default([])
+
+  usageArea           String?
+  quantityInfo        String?
+  productionTimeInfo  String?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([vendorId])
+  @@map("reference_products")
+}
+
+model SellerReview {
+  id         String   @id @default(cuid())
+  sellerId   String
+  seller     Vendor   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderId    String?
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  quoteId    String?
+  quote      PremiumQuoteOffer? @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  rating     Int
+  comment    String
+  createdAt  DateTime @default(now())
+
+  @@index([sellerId])
+  @@index([customerId])
+  @@index([orderId])
+  @@index([quoteId])
+  @@map("seller_reviews")
+}
+
+model SubscriptionPlan {
+  id           String   @id @default(cuid())
+  name         String
+  durationDays Int
+  price        Float
+  isActive     Boolean  @default(true)
+
+  purchases    SubscriptionPurchase[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([durationDays])
+  @@map("subscription_plans")
+}
+
+model SubscriptionPurchase {
+  id              String   @id @default(cuid())
+  planId          String
+  vendorId        String
+  amountKurus     Int
+  vatRate         Float    @default(0.20)
+  status          String   @default("PENDING")
+  merchantOid     String   @unique
+
+  plan            SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  vendor          Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([planId])
+  @@map("subscription_purchases")
 }
 
 model Address {
@@ -121,6 +258,13 @@ enum HomepageSectionType {
   BANNER_GRID
 }
 
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
 model HomepageSection {
   id       String              @id @default(cuid())
   title    String
@@ -159,7 +303,8 @@ model Order {
   shippingCompany String?       // Kargo firması adı (Yurtiçi, Aras, MNG vb.)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-  items           OrderItem[]
+  items         OrderItem[]
+  sellerReviews SellerReview[]
   supportTickets  SupportTicket[]
 
   @@map("orders")
@@ -352,6 +497,15 @@ model SupplierApplication {
   contactName  String                     // Yetkili Kişi
   phone        String                     // Telefon
   email        String                     // E-posta
+  companyType  String?                    // Şahıs, Ltd, A.Ş. vb.
+  taxNumber    String?                    // Vergi Kimlik No
+  city         String?                    // İl
+  district     String?                    // İlçe
+  taxPlateUrl  String?                    // Vergi Levhası
+  tradeRegistryUrl String?                // Ticaret Sicil Gazetesi
+  signatureCircularUrl String?            // İmza Sirküsü
+  identityDocumentUrl String?             // Yetkili Kimlik
+  isKvkkAccepted Boolean                  @default(false) // Aydınlatma metni onayı
   productGroup String                     // Ürün Grubu
   status       SupplierApplicationStatus @default(PENDING)
   createdAt    DateTime                   @default(now())
@@ -448,19 +602,40 @@ enum PremiumQuoteOfferStatus {
   REJECTED
 }
 
+enum QuoteMessageType {
+  TEXT
+  PAYMENT_REQUEST
+}
+
+enum DisputeStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+}
+
 model PremiumQuoteRequest {
   id               String                   @id @default(cuid())
   requestNo         String                   @unique
   userId           String?
   user             User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  preferredVendorId String?
+  preferredVendor   Vendor?                 @relation("PreferredVendor", fields: [preferredVendorId], references: [id], onDelete: SetNull)
   productId         String?
   product          Product?                 @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  referenceProductId String?
+  technicalSpecs    Json?
+  designFiles       String[]
+  sampleImages      String[]
 
   productName      String
   quantity         Int
   description      String
   technicalDetails String?
   fileUrl          String?
+  contactName      String?
+  contactEmail     String?
+  contactPhone     String?
   status           PremiumQuoteRequestStatus @default(PENDING)
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
@@ -469,6 +644,7 @@ model PremiumQuoteRequest {
 
   @@index([userId])
   @@index([productId])
+  @@index([referenceProductId])
   @@map("premium_quote_requests")
 }
 
@@ -484,12 +660,59 @@ model PremiumQuoteOffer {
   deliveryTime  String
   note          String
   status        PremiumQuoteOfferStatus @default(PENDING)
+  isDisputed    Boolean                @default(false)
   createdAt     DateTime               @default(now())
+
+  messages      QuoteMessage[]
+  sellerReviews SellerReview[]
+  disputes      Dispute[]
 
   @@unique([requestId, vendorId])
   @@index([vendorId])
   @@index([requestId])
   @@map("premium_quote_offers")
+}
+
+model Dispute {
+  id          String        @id @default(cuid())
+  quoteId     String
+  quote       PremiumQuoteOffer @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    User          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sellerId    String
+  seller      Vendor        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  reason      String
+  description String
+  status      DisputeStatus @default(OPEN)
+  createdAt   DateTime      @default(now())
+
+  @@index([quoteId])
+  @@index([customerId])
+  @@index([sellerId])
+  @@map("disputes")
+}
+
+model QuoteMessage {
+  id         String           @id @default(cuid())
+  quoteId    String
+  quote      PremiumQuoteOffer @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  senderId   String
+  sender     User             @relation("QuoteMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User             @relation("QuoteMessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  type       QuoteMessageType  @default(TEXT)
+  content    String
+  attachmentUrl String?
+  agreedPrice Float?
+  agreedDeliveryDays Int?
+  agreedDescription String?
+  isSystemMessage Boolean      @default(false)
+  createdAt  DateTime         @default(now())
+
+  @@index([quoteId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@map("quote_messages")
 }
 
 // Makine İlanları

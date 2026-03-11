@@ -42,11 +42,14 @@ export async function PATCH(
       if (body.commissionRate < 0 || body.commissionRate > 100) {
         return NextResponse.json({ error: 'Komisyon oranı 0-100 arasında olmalıdır.' }, { status: 400 });
       }
-      vendorData.commissionRate = body.commissionRate;
     }
 
     if (typeof body.isBlocked === 'boolean') {
       vendorData.isBlocked = body.isBlocked;
+    }
+
+    if (typeof body.canAddRetailProducts === 'boolean') {
+      vendorData.canAddRetailProducts = body.canAddRetailProducts;
     }
 
     // Update user data
@@ -70,6 +73,21 @@ export async function PATCH(
       userData.password = await bcrypt.hash(body.newPassword, 12);
     }
 
+    // Update seller profile stats
+    const profileData: any = {};
+    if (typeof body.rating === 'number' && Number.isFinite(body.rating)) {
+      if (body.rating < 0 || body.rating > 5) {
+        return NextResponse.json({ error: 'Mağaza puanı 0-5 arasında olmalıdır.' }, { status: 400 });
+      }
+      profileData.rating = body.rating;
+    }
+    if (typeof body.completedJobs === 'number' && Number.isFinite(body.completedJobs)) {
+      if (body.completedJobs < 0) {
+        return NextResponse.json({ error: 'Başarılı iş sayısı 0 veya daha büyük olmalıdır.' }, { status: 400 });
+      }
+      profileData.completedJobs = Math.floor(body.completedJobs);
+    }
+
     // Transaction update
     const result = await prisma.$transaction(async (tx) => {
       // Update vendor
@@ -84,6 +102,20 @@ export async function PATCH(
         await tx.user.update({
           where: { id: vendor.owner.id },
           data: userData,
+        });
+      }
+
+      if (Object.keys(profileData).length > 0) {
+        await (tx as any).sellerProfile.upsert({
+          where: { vendorId: id },
+          update: profileData,
+          create: {
+            vendorId: id,
+            slug: updatedVendor.slug,
+            storeName: updatedVendor.name,
+            ...profileData,
+          },
+          select: { id: true },
         });
       }
 

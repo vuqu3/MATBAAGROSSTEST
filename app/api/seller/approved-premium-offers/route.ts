@@ -37,6 +37,12 @@ export async function GET() {
             requestNo: true,
             productName: true,
             quantity: true,
+            description: true,
+            technicalDetails: true,
+            fileUrl: true,
+            contactName: true,
+            contactEmail: true,
+            contactPhone: true,
             user: {
               select: {
                 id: true,

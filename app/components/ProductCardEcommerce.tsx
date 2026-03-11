@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ShoppingCart, Star } from 'lucide-react';
+import { ShoppingCart, Star, MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '../../context/CartContext';
 import { useState } from 'react';
@@ -19,6 +19,8 @@ interface ProductCardEcommerceProps {
   productType?: 'READY' | 'CUSTOM';
   stock?: number | null;
   stockQuantity?: number | null;
+  categorySlug?: string;
+  isLargeCard?: boolean;
 }
 
 export default function ProductCardEcommerce({
@@ -34,7 +36,12 @@ export default function ProductCardEcommerce({
   productType,
   stock,
   stockQuantity,
+  categorySlug,
+  isLargeCard = false,
 }: ProductCardEcommerceProps) {
+  const isPremium = categorySlug === 'premium-urunler';
+  const isBrandQuote = categorySlug === 'markaniza-ozel-uretim' || isLargeCard;
+  const isQuoteCard = isPremium || isBrandQuote;
   // İndirim mantığı: compareAtPrice > price ise indirim var
   const effectiveOriginalPrice = originalPrice || compareAtPrice;
   const effectiveDiscount = discount ?? (effectiveOriginalPrice && effectiveOriginalPrice > price 
@@ -79,6 +86,84 @@ export default function ProductCardEcommerce({
     }
     router.push(`/urun/${id}`);
   };
+
+  if (isQuoteCard) {
+    const badgeLabel = isBrandQuote ? 'Markanıza Özel' : 'Premium';
+    const priceLabel = isBrandQuote ? 'Projeye özel fiyatlandırma' : 'Fiyat için teklif isteyin';
+    const btnLabel = isBrandQuote ? 'Fiyat Teklifi Al' : 'Teklif İste';
+
+    if (isLargeCard) {
+      return (
+        <div className="bg-white rounded-lg border border-orange-200 shadow-sm hover:border-orange-500 hover:shadow-md transition-all overflow-hidden group flex flex-col min-h-[300px]">
+            <Link href={`/urun/${id}`} className="flex-shrink-0">
+              <div className="relative w-full aspect-[4/3] bg-orange-50 overflow-hidden flex items-center justify-center">
+                <img
+                  src={image}
+                  alt={name}
+                  className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 p-2"
+                />
+                <div className="absolute top-2 left-2 bg-orange-500 text-white px-2 py-0.5 rounded text-[10px] font-bold z-10">
+                  {badgeLabel}
+                </div>
+              </div>
+            </Link>
+            <div className="p-3 flex flex-col flex-grow">
+              <Link href={`/urun/${id}`}>
+                <h3 className="font-medium text-sm text-[#484848] mb-1.5 line-clamp-2 hover:text-[#FF6000] transition-colors leading-snug">
+                  {name}
+                </h3>
+              </Link>
+              <div className="mt-auto pt-2">
+                <p className="text-xs text-orange-600 font-medium mb-2">{priceLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/urun/${id}`)}
+                  className="w-full font-semibold py-2 px-3 rounded-md text-sm transition-all flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white shadow-sm hover:shadow-md active:scale-95"
+                >
+                  <MessageSquare size={14} />
+                  {btnLabel}
+                </button>
+              </div>
+            </div>
+          </div>
+      );
+    }
+
+    return (
+      <div className="bg-white rounded-md border border-orange-200 shadow-sm hover:border-orange-400 hover:shadow-md transition-all overflow-hidden group flex flex-col min-h-[280px]">
+          <Link href={`/urun/${id}`} className="flex-shrink-0">
+            <div className="relative w-full aspect-square bg-orange-50 overflow-hidden flex items-center justify-center">
+              <img
+                src={image}
+                alt={name}
+                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 p-1"
+              />
+              <div className="absolute top-1 left-1 bg-orange-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold z-10">
+                {badgeLabel}
+              </div>
+            </div>
+          </Link>
+          <div className="p-2 flex flex-col flex-grow">
+            <Link href={`/urun/${id}`}>
+              <h3 className="font-medium text-sm text-[#484848] mb-1 line-clamp-2 hover:text-[#FF6000] transition-colors">
+                {name}
+              </h3>
+            </Link>
+            <div className="mt-auto pt-2">
+              <p className="text-xs text-orange-600 font-medium mb-2">{priceLabel}</p>
+              <button
+                type="button"
+                onClick={() => router.push(`/urun/${id}`)}
+                className="w-full font-medium py-1.5 px-3 rounded-md text-sm transition-colors flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <MessageSquare size={14} />
+                {btnLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-md border border-gray-200 shadow-sm hover:border-[#FF6000] hover:shadow-md transition-all overflow-hidden group flex flex-col min-h-[280px]">

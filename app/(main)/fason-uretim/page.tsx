@@ -133,8 +133,28 @@ export default function FasonUretimPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
+    <div className="relative min-h-screen bg-white text-slate-900">
       <FasonWelcomeModal open={welcomeOpen} onClose={() => setWelcomeOpen(false)} />
+
+      <div className="fixed inset-0 z-30 pointer-events-none bg-black/35" />
+      <div className="fixed inset-0 z-40 flex items-center justify-center p-4 pointer-events-none">
+        <div className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white/85 p-8 text-center shadow-2xl pointer-events-auto">
+          <p className="text-xl sm:text-2xl font-extrabold text-slate-900">
+            🛠️ Matbaagross Fason Üretim Merkezi Çok Yakında Hizmetinizde!
+          </p>
+          <p className="mt-3 text-sm sm:text-base font-medium text-slate-700">
+            Hazırlıklarımız devam ediyor, en geniş makine parkuruyla yakında buradayız.
+          </p>
+          <div className="mt-6">
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-colors"
+            >
+              Ana Sayfaya Dön
+            </Link>
+          </div>
+        </div>
+      </div>
       {/* Hero — Endüstriyel matbaa gücü */}
       <section className="relative min-h-[70vh] flex flex-col items-center justify-center text-center px-4 py-20 overflow-hidden">
         {/* Arka plan: endüstriyel matbaa / ağır üretim (kendi görselinizi public veya CDN ile değiştirebilirsiniz) */}
@@ -330,7 +350,7 @@ export default function FasonUretimPage() {
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm text-white bg-slate-800 hover:bg-slate-700 transition-colors whitespace-nowrap"
           >
             <Factory className="w-4 h-4" />
-            Tedarikçimiz Ol
+            Premium Üretici Olun
           </Link>
         </div>
       </section>    </div>

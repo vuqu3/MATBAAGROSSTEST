@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { BadgeCheck, FileText, Phone, Mail, User2 } from 'lucide-react';
 
 export default function OnaylananTekliflerPage() {
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,10 @@ export default function OnaylananTekliflerPage() {
         customerText: o?.request?.user?.name || o?.request?.user?.email || '-',
         requestNo: o?.request?.requestNo ?? '-',
         productName: o?.request?.productName ?? '-',
+        contactName: o?.request?.contactName ?? null,
+        contactEmail: o?.request?.contactEmail ?? null,
+        contactPhone: o?.request?.contactPhone ?? null,
+        fileUrl: o?.request?.fileUrl ?? null,
       };
     });
   }, [offers]);
@@ -48,7 +53,7 @@ export default function OnaylananTekliflerPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Onaylanan Teklifler</h1>
-        <p className="text-sm text-gray-500 mt-1">Ödemesi alınmış (Escrow) Premium işleriniz</p>
+        <p className="text-sm text-gray-500 mt-1">Onaylanan / ödemesi alınmış işleriniz</p>
       </div>
 
       <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
@@ -89,8 +94,44 @@ export default function OnaylananTekliflerPage() {
                 rows.map((r) => (
                   <tr key={r.id} className="border-t border-gray-100">
                     <td className="px-4 py-3 font-mono text-gray-800">{r.requestNo}</td>
-                    <td className="px-4 py-3 text-gray-700">{r.customerText}</td>
-                    <td className="px-4 py-3 text-gray-700">{r.productName}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                      <div className="space-y-1">
+                        <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold bg-emerald-100 text-emerald-800">
+                          <BadgeCheck className="h-4 w-4" />
+                          Onaylandı
+                        </div>
+                        <div className="text-sm font-semibold text-gray-800">{r.customerText}</div>
+                        {(r.contactEmail || r.contactPhone || r.contactName) && (
+                          <div className="text-xs text-gray-500 space-y-0.5">
+                            {r.contactName && (
+                              <div className="flex items-center gap-1.5"><User2 className="h-3.5 w-3.5" />{r.contactName}</div>
+                            )}
+                            {r.contactEmail && (
+                              <div className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{r.contactEmail}</div>
+                            )}
+                            {r.contactPhone && (
+                              <div className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{r.contactPhone}</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">
+                      <div className="space-y-1">
+                        <div className="text-sm font-semibold text-gray-900">{r.productName}</div>
+                        {r.fileUrl && (
+                          <a
+                            href={r.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            Dosyayı Gör
+                          </a>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-gray-700">{r.quantityText}</td>
                     <td className="px-4 py-3 text-gray-700 font-semibold">{r.totalText}</td>
                     <td className="px-4 py-3 text-gray-700">{r.deliveryTime || '-'}</td>

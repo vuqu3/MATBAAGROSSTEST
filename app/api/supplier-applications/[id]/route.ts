@@ -14,7 +14,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { status } = body;
+    const { status, notify } = body;
 
     if (!['REVIEWED', 'APPROVED', 'REJECTED'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
@@ -32,6 +32,32 @@ export async function PATCH(
       where: { id },
       data: { status },
     });
+
+    if (notify === 'MISSING_DOCS') {
+      await prisma.user.updateMany({
+        where: { email: application.email },
+        data: { applicationStatus: 'PENDING_DOCS' } as any,
+      });
+      console.log('[SupplierApplication email draft]', {
+        type: 'MISSING_DOCS',
+        to: application.email,
+        company: application.companyName,
+        subject: 'Eksik Evrak Talebi',
+      });
+    }
+
+    if (notify === 'REJECTED') {
+      await prisma.user.updateMany({
+        where: { email: application.email },
+        data: { applicationStatus: 'REJECTED' } as any,
+      });
+      console.log('[SupplierApplication email draft]', {
+        type: 'REJECTED',
+        to: application.email,
+        company: application.companyName,
+        subject: 'Başvuru Sonucu',
+      });
+    }
 
     return NextResponse.json(updatedApplication);
   } catch (error) {

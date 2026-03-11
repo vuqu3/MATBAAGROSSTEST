@@ -78,6 +78,7 @@ const navGroups: NavGroup[] = [
       { label: 'Site Ayarları', href: '/admin/settings' },
       { label: 'Kargo', href: '/admin/settings/shipping' },
       { label: 'Ödeme', href: '/admin/settings/payment' },
+      { label: 'Abonelik Fiyatları', href: '/admin/subscription-plans' },
       { label: 'Ana Sayfa Düzeni', href: '/admin/settings/homepage' },
     ],
   },

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { getSession, signIn, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, AlertCircle } from 'lucide-react';
 
@@ -18,22 +18,45 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       const result = await signIn('credentials', {
-        email,
+        email: normalizedEmail,
         password,
         redirect: false,
       });
 
-      if (result?.error) {
+      if (!result) {
+        setError('Bir hata oluştu. Lütfen tekrar deneyin.');
+        setLoading(false);
+        return;
+      }
+
+      if (result.error) {
         setError('Email veya şifre hatalı');
         setLoading(false);
         return;
       }
 
-      if (result?.ok) {
-        router.push('/admin');
+      if (result.ok) {
+        const session = await getSession();
+        const role = String(session?.user?.role ?? '').toUpperCase();
+
+        if (role === 'ADMIN') {
+          setLoading(false);
+          window.location.href = 'https://www.matbaagross.com/admin';
+          return;
+        }
+
+        await signOut({ redirect: false });
+        setError('Bu hesap Admin paneline yetkili değil.');
+        setLoading(false);
         router.refresh();
+        return;
       }
+
+      setError('Bir hata oluştu. Lütfen tekrar deneyin.');
+      setLoading(false);
     } catch (err) {
       setError('Bir hata oluştu. Lütfen tekrar deneyin.');
       setLoading(false);

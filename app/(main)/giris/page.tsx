@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { signIn, getSession } from 'next-auth/react';
+import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -41,15 +41,7 @@ function LoginPageInner() {
       }
 
       if (result?.ok) {
-        // Rol kontrolü: SELLER ise kendi paneline yönlendir
-        const session = await getSession();
-        const role = (session?.user as { role?: string })?.role;
-
-        if (role === 'SELLER') {
-          router.push('/seller-dashboard');
-        } else {
-          router.push(callbackUrl);
-        }
+        router.push(callbackUrl);
         router.refresh();
       }
     } catch {

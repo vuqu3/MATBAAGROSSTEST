@@ -15,7 +15,7 @@ const ALLOWED_TYPES = [
   'application/postscript', // .ai .eps
 ];
 const ALLOWED_EXT = ['.pdf', '.ai', '.eps', '.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif'];
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
 export async function POST(request: Request) {
   try {
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
-        { error: 'Dosya boyutu 10MB\'dan küçük olmalıdır' },
+        { error: 'Dosya boyutu çok yüksek, maksimum 5MB yükleyebilirsiniz' },
         { status: 400 }
       );
     }

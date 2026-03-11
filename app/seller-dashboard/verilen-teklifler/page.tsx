@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { BadgeCheck } from 'lucide-react';
 
 export default function VerilenTekliflerPage() {
@@ -11,6 +12,7 @@ export default function VerilenTekliflerPage() {
     return offers.map((o) => ({
       ...o,
       createdAtText: o.createdAt ? new Date(o.createdAt).toLocaleString('tr-TR') : '-',
+      requestStatus: o?.requestStatus ?? o?.request?.status,
     }));
   }, [offers]);
 
@@ -32,10 +34,26 @@ export default function VerilenTekliflerPage() {
     run();
   }, []);
 
-  const statusText: Record<string, string> = {
-    PENDING: 'Beklemede',
-    ACCEPTED: 'Onaylandı',
-    REJECTED: 'Reddedildi',
+  const resultStatus = (o: any) => {
+    const offerStatus = String(o?.status ?? '').toUpperCase();
+    const requestStatus = String(o?.requestStatus ?? o?.request?.status ?? '').toUpperCase();
+
+    if (offerStatus === 'REJECTED') {
+      if (requestStatus === 'QUOTED' || requestStatus === 'PROCESSING' || requestStatus === 'COMPLETED') {
+        return { text: 'İş Başkasına Verildi', tone: 'bg-slate-100 text-slate-800' };
+      }
+      return { text: 'Reddedildi', tone: 'bg-rose-100 text-rose-800' };
+    }
+
+    if (offerStatus === 'ACCEPTED') {
+      return { text: 'Ödeme Bekleniyor', tone: 'bg-blue-100 text-blue-800' };
+    }
+
+    if (offerStatus === 'PAID') {
+      return { text: 'Onaylandı', tone: 'bg-emerald-100 text-emerald-800' };
+    }
+
+    return { text: 'Müşteri Değerlendiriyor', tone: 'bg-amber-100 text-amber-800' };
   };
 
   return (
@@ -75,22 +93,28 @@ export default function VerilenTekliflerPage() {
                 rows.map((q) => (
                   <tr key={q.id} className="border-t border-gray-100">
                     <td className="px-4 py-3 font-mono text-gray-800">{q.requestNo}</td>
-                    <td className="px-4 py-3 text-gray-700">{q.requestTitle ?? '-'}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                      <Link
+                        href={`/seller-dashboard/verilen-teklifler/${encodeURIComponent(String(q.id))}`}
+                        className="font-semibold text-[#FF6000] hover:underline"
+                      >
+                        {q.requestTitle ?? '-'}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-gray-700">{Number(q.price).toLocaleString('tr-TR')} TL</td>
                     <td className="px-4 py-3 text-gray-700">{q.deliveryTime || '-'}</td>
                     <td className="px-4 py-3">
+                      {(() => {
+                        const st = resultStatus(q);
+                        return (
                       <span
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
-                          q.status === 'ACCEPTED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : q.status === 'REJECTED'
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-amber-100 text-amber-800'
-                        }`}
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${st.tone}`}
                       >
                         <BadgeCheck className="h-4 w-4" />
-                        {statusText[q.status] ?? q.status}
+                        {st.text}
                       </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-right text-gray-600 text-xs">{q.createdAtText}</div>

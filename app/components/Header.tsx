@@ -131,15 +131,15 @@ export default function Header() {
               <span>Fason Üretim Merkezi</span>
             </Link>
             <Link
-              href="/premium"
+              href="https://www.matbaagross.com/urunler?kategori=markaniza-ozel-uretim"
               className="relative flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-600 text-yellow-950 font-bold shadow-[0_0_10px_rgba(234,179,8,0.6)] overflow-hidden hover:shadow-[0_0_14px_rgba(234,179,8,0.75)] hover:from-yellow-500 hover:via-yellow-300 hover:to-yellow-500 transition-all duration-300"
             >
               <span className="pointer-events-none absolute inset-0 animate-premium-shimmer bg-gradient-to-r from-transparent via-white/40 to-transparent w-1/2" aria-hidden />
               <Crown className="w-4 h-4 flex-shrink-0 text-yellow-950" />
               <span>MatbaaGross Premium</span>
             </Link>
-            <Link href="/tedarikci-ol" className="text-[#484848] hover:text-[#FF6000] transition-colors">
-              Tedarikçimiz Ol
+            <Link href="https://fabrika.matbaagross.com" className="text-[#484848] hover:text-[#FF6000] transition-colors">
+              Premium Üretici Olun
             </Link>
           </div>
         </div>

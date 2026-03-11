@@ -10,6 +10,7 @@ const legalLinks = [
   { href: '/iade-sartlari', label: 'İptal ve İade Şartları' },
   { href: '/kargo-sozlesmesi', label: 'Kargo Sözleşmesi' },
   { href: '/kvkk', label: 'Kişisel Verilerin Korunması' },
+  { href: '/cerez-politikasi', label: 'Çerez Politikası' },
 ];
 
 export default function LegalLayout({ children }: { children: React.ReactNode }) {

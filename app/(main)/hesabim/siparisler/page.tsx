@@ -20,6 +20,8 @@ type Order = {
   barcode?: string | null;
   totalAmount: number;
   status: string;
+  paymentStatus?: string;
+  paymentMethod?: string;
   createdAt: string;
   invoiceUrl?: string | null;
   items: OrderItem[];
@@ -125,9 +127,16 @@ export default function SiparislerPage() {
   }, []);
 
   // Filter orders based on status
-  const activeOrders = orders.filter(order => 
-    ['PENDING', 'PROCESSING', 'SHIPPED'].includes(order.status)
-  );
+  const activeOrders = orders.filter((order) => {
+    const isActiveStatus = ['PENDING', 'PROCESSING', 'SHIPPED'].includes(order.status);
+    if (!isActiveStatus) return false;
+
+    // Do not show unpaid card orders as "Sipariş Alındı".
+    const isUnpaidCard = order.paymentMethod === 'CARD' && order.paymentStatus === 'AWAITING_PAYMENT';
+    if (isUnpaidCard) return false;
+
+    return true;
+  });
   
   const pastOrders = orders.filter(order => 
     ['COMPLETED', 'CANCELLED', 'RETURNED', 'REFUNDED'].includes(order.status)

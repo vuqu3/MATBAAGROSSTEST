@@ -2,7 +2,6 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
-import Image from 'next/image';
 import Barcode from 'react-barcode';
 
 type OrderItemType = {
@@ -123,12 +122,11 @@ function OrderPrintPageInner() {
         {/* A6 dikey kargo etiketi - ortada */}
         <div className="print-label w-[105mm] min-h-[148mm] max-w-[105mm] bg-white text-black p-5 flex flex-col gap-4 shadow-lg print:shadow-none">
           <div className="flex justify-center border-b border-gray-400 pb-3">
-            <Image
-              src="/matbaagross-logo.png"
-              alt="MatbaaGross"
-              width={160}
-              height={45}
-              className="h-11 w-auto object-contain"
+            <img
+              src="/logo.svg"
+              alt="Matbaagross"
+              className="h-10 w-auto object-contain grayscale contrast-200"
+              style={{ printColorAdjust: 'exact' }}
             />
           </div>
           <p className="text-center text-xs text-gray-600 font-medium">MatbaaGross Pazaryeri</p>

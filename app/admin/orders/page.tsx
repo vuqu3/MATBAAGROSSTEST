@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Package, ChevronDown, MapPin, ChevronLeft, ChevronRight, Download, Barcode as BarcodeIcon, Scan, FileText } from 'lucide-react';
+import { Package, ChevronDown, MapPin, ChevronLeft, ChevronRight, Download, Barcode as BarcodeIcon, Scan, FileText, Printer } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const PAGE_SIZE = 10;
@@ -65,8 +65,11 @@ export default function AdminOrdersPage() {
   const [barcodeScan, setBarcodeScan] = useState('');
   const [barcodeScanLoading, setBarcodeScanLoading] = useState(false);
   const [barcodeScanMessage, setBarcodeScanMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
-  const [printOrder, setPrintOrder] = useState<Order | null>(null);
-  const barcodePrintRef = useRef<HTMLDivElement>(null);
+
+  const openPrintWindow = (orderId: string) => {
+    const url = `/admin/orders/print?orderId=${encodeURIComponent(orderId)}`;
+    window.open(url, '_blank', 'width=420,height=640,scrollbars=yes');
+  };
 
   const loadOrders = useCallback((pageNum: number) => {
     setLoading(true);
@@ -143,37 +146,6 @@ export default function AdminOrdersPage() {
       setBarcodeScanLoading(false);
     }
   };
-
-  const printBarcodeLabel = (order: Order) => {
-    setPrintOrder(order);
-  };
-
-  useEffect(() => {
-    if (!printOrder || !barcodePrintRef.current) return;
-    const timer = setTimeout(() => {
-      const content = barcodePrintRef.current;
-      if (!content) return;
-      const win = window.open('', '_blank');
-      if (!win) return;
-      win.document.write(`
-        <!DOCTYPE html><html><head><title>Barkod - ${printOrder.barcode ?? printOrder.id}</title>
-        <style>
-          body { font-family: Arial,sans-serif; padding: 8px; margin: 0; font-size: 11px; }
-          .barcode-wrap { margin: 6px 0; }
-          .barcode-wrap svg { max-width: 100%; height: auto; }
-          .line { margin: 2px 0; }
-          strong { font-size: 12px; }
-        </style></head><body>
-        ${content.innerHTML}
-        </body></html>`);
-      win.document.close();
-      win.focus();
-      win.print();
-      win.close();
-      setPrintOrder(null);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [printOrder]);
 
   if (loading) {
     return (
@@ -401,10 +373,13 @@ export default function AdminOrdersPage() {
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={() => printBarcodeLabel(order)}
+                                      onClick={() => openPrintWindow(order.id)}
                                       className="mt-2 w-full py-1.5 px-2 bg-slate-700 text-white text-xs font-medium rounded hover:bg-slate-800"
                                     >
-                                      Barkod Yazdır
+                                      <span className="inline-flex items-center justify-center gap-1.5">
+                                        <Printer size={14} />
+                                        Barkod Yazdır
+                                      </span>
                                     </button>
                                   </>
                                 ) : (
@@ -452,20 +427,6 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
-      {/* Gizli: Barkod yazdırma içeriği (termal etiket) */}
-      {printOrder && (
-        <div ref={barcodePrintRef} className="absolute left-[-9999px] top-0">
-          <div className="line"><strong>Sipariş Barkodu</strong></div>
-          {printOrder.barcode && (
-            <div className="barcode-wrap">
-              <Barcode value={printOrder.barcode} height={36} margin={0} fontSize={10} />
-            </div>
-          )}
-          <div className="line">Sipariş: #{printOrder.id.slice(-8)}</div>
-          <div className="line">Tarih: {new Date(printOrder.createdAt).toLocaleString('tr-TR')}</div>
-          <div className="line">Toplam: {Number(printOrder.totalAmount).toLocaleString('tr-TR')} TL</div>
-        </div>
-      )}
     </div>
   );
 }

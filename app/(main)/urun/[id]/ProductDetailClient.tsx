@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { CreditCard, Home, X } from 'lucide-react';
+import { CreditCard, Home, X, MessageSquare } from 'lucide-react';
+import SmartQuoteForm from '@/app/components/SmartQuoteForm';
 import { useCart } from '@/context/CartContext';
 import ProductGallery from '@/app/components/product-detail/ProductGallery';
 import ProductInfo from '@/app/components/product-detail/ProductInfo';
@@ -58,6 +59,18 @@ export default function ProductDetailClient({
   const [uploading, setUploading] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [isTaksitModalOpen, setIsTaksitModalOpen] = useState(false);
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+
+  const catSlug = product.category?.slug ?? '';
+  const parentSlug = (product.category as any)?.parent?.slug ?? '';
+
+  const isPremiumCategory =
+    catSlug === 'premium-urunler' || parentSlug === 'premium-urunler';
+
+  const isBrandQuoteCategory =
+    catSlug === 'markaniza-ozel-uretim' || parentSlug === 'markaniza-ozel-uretim';
+
+  const isQuoteCategory = isPremiumCategory || isBrandQuoteCategory;
 
   const attributes = (product.attributes && Array.isArray(product.attributes) ? product.attributes : []) as ProductAttribute[];
   const vendorName = product.vendorName ?? 'MatbaaGross';
@@ -188,6 +201,7 @@ export default function ProductDetailClient({
                 minOrderQuantity={product.minOrderQuantity}
                 productionDays={product.productionDays}
                 productType={product.productType}
+                isBrandQuoteCategory={isBrandQuoteCategory}
               />
             </div>
 
@@ -197,6 +211,7 @@ export default function ProductDetailClient({
                 name={product.name}
                 category={product.category}
                 vendorName={vendorName}
+                isBrandQuoteCategory={isBrandQuoteCategory}
                 highlights={product.highlights ?? null}
                 attributes={attributes.length > 0 ? attributes : null}
                 description={product.description}
@@ -211,38 +226,67 @@ export default function ProductDetailClient({
                 onVariantChange={setSelectedVariant}
               />
 
-              <button
-                type="button"
-                onClick={() => setIsTaksitModalOpen(true)}
-                className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 transition-colors"
-              >
-                <CreditCard className="h-4 w-4 text-gray-700" />
-                Taksit Seçenekleri
-              </button>
+              {!isBrandQuoteCategory ? (
+                <button
+                  type="button"
+                  onClick={() => setIsTaksitModalOpen(true)}
+                  className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 transition-colors"
+                >
+                  <CreditCard className="h-4 w-4 text-gray-700" />
+                  Taksit Seçenekleri
+                </button>
+              ) : null}
             </div>
 
             {/* Sağ: Sticky aksiyon kartı */}
             <div className="lg:col-span-4">
-              <ProductActionCard
-                productId={product.id}
-                unitPrice={unitPrice}
-                totalPrice={totalPrice}
-                dbUnitPrice={product.unitPrice ?? null}
-                quantity={quantity}
-                onQuantityChange={setQuantity}
-                onAddToCart={handleAddToCart}
-                addedToCart={added}
-                loading={uploading}
-                minOrderQuantity={product.minOrderQuantity}
-                canAddToCart={!stockIssue}
-                disabledText={
-                  stockIssue === 'out_of_stock'
-                    ? 'Stokta Yok'
-                    : stockIssue === 'insufficient_stock'
-                      ? 'Yetersiz Stok'
-                      : undefined
-                }
-              />
+              {isQuoteCategory ? (
+                <div className="sticky top-24 rounded-2xl border border-orange-200 bg-orange-50 p-6 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-orange-600 mb-1">
+                    {isBrandQuoteCategory ? 'Markanıza Özel Üretim' : 'Premium Ürün'}
+                  </p>
+                  <h3 className="text-base font-bold text-gray-900 mb-2">
+                    {isBrandQuoteCategory ? 'Projeye Özel Fiyatlandırma' : 'Kurumsal Fiyat Teklifi'}
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-5 leading-relaxed">
+                    {isBrandQuoteCategory
+                      ? 'Markanıza özel üretim talepleriniz için premium üretici ağımıza iletin, size en uygun teklifi sunалım.'
+                      : 'Bu ürün kurumsal tedarik kapsamındadır. Üretici ağımızdan size özel fiyat teklifi alabilirsiniz.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsQuoteModalOpen(true)}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 text-sm transition-colors shadow-md"
+                  >
+                    <MessageSquare className="h-5 w-5" />
+                    {isBrandQuoteCategory ? 'Fiyat Teklifi Al' : 'Teklif İste'}
+                  </button>
+                  <p className="mt-3 text-center text-[11px] text-gray-500">
+                    Teklifler 24-48 saat içinde iletilir
+                  </p>
+                </div>
+              ) : (
+                <ProductActionCard
+                  productId={product.id}
+                  unitPrice={unitPrice}
+                  totalPrice={totalPrice}
+                  dbUnitPrice={product.unitPrice ?? null}
+                  quantity={quantity}
+                  onQuantityChange={setQuantity}
+                  onAddToCart={handleAddToCart}
+                  addedToCart={added}
+                  loading={uploading}
+                  minOrderQuantity={product.minOrderQuantity}
+                  canAddToCart={!stockIssue}
+                  disabledText={
+                    stockIssue === 'out_of_stock'
+                      ? 'Stokta Yok'
+                      : stockIssue === 'insufficient_stock'
+                        ? 'Yetersiz Stok'
+                        : undefined
+                  }
+                />
+              )}
             </div>
           </div>
 
@@ -254,7 +298,18 @@ export default function ProductDetailClient({
             products={relatedList}
           />
 
-          {isTaksitModalOpen ? (
+          {isQuoteModalOpen && (
+            <SmartQuoteForm
+              variant="modal"
+              productId={product.id}
+              productName={product.name}
+              minOrderQuantity={product.minOrderQuantity ?? null}
+              onClose={() => setIsQuoteModalOpen(false)}
+              title={isBrandQuoteCategory ? 'Fiyat Teklifi Al' : 'Teklif İste'}
+            />
+          )}
+
+          {isTaksitModalOpen && !isBrandQuoteCategory ? (
             <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4">
               <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto bg-white rounded-2xl p-6 relative">
                 <button

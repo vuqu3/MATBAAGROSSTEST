@@ -64,6 +64,7 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
   const isDiscountPage = categorySlug === '50-indirimli-urunler';
   const isReadyStockPage = categorySlug === 'stoktan-teslim';
   const isAmbalajGrossPage = categorySlug === 'ambalaj-gross';
+  let isOzelUretimPage = categorySlug === 'markaniza-ozel-uretim';
 
   let products = [];
   let pageTitle = 'Tüm Ürünler';
@@ -211,12 +212,19 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
         id: true,
         name: true,
         slug: true,
+        parent: {
+          select: { slug: true },
+        },
         children: {
           select: { id: true },
           where: { isActive: true },
         },
       },
     });
+
+    if (!isOzelUretimPage && categoryWithChildren?.parent?.slug === 'markaniza-ozel-uretim') {
+      isOzelUretimPage = true;
+    }
 
     const categoryIds = categoryWithChildren
       ? [categoryWithChildren.id, ...(categoryWithChildren.children || []).map((c) => c.id)]
@@ -265,6 +273,10 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
       where: {
         isActive: true,
         isPublished: true,
+        NOT: [
+          { category: { slug: 'markaniza-ozel-uretim' } },
+          { category: { parent: { slug: 'markaniza-ozel-uretim' } } },
+        ],
       },
       include: {
         category: {
@@ -315,7 +327,7 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
 
         {/* Ürün Grid */}
         {products.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+          <div className={isOzelUretimPage ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" : "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4"}>
             {products.map((product) => {
               // Fiyat hesaplaması (ana sayfadaki mantıkla aynı)
               const base = Number(product.basePrice);
@@ -344,6 +356,8 @@ export default async function UrunlerPage({ searchParams }: PageProps) {
                   productType={product.productType ?? undefined}
                   stock={product.stock}
                   stockQuantity={product.stockQuantity}
+                  categorySlug={product.category?.slug ?? undefined}
+                  isLargeCard={isOzelUretimPage}
                 />
               );
             })}

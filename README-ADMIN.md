@@ -11,7 +11,7 @@ CREATE DATABASE matbaagross;
 2. `.env` dosyasını oluşturun ve DATABASE_URL'i ayarlayın:
 ```
 DATABASE_URL="postgresql://user:password@localhost:5432/matbaagross?schema=public"
-NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_URL="https://www.matbaagross.com"
 NEXTAUTH_SECRET="your-secret-key-here"
 ```
 
@@ -55,7 +55,7 @@ VALUES (
 ## 3. Admin Paneline Erişim
 
 1. Sunucuyu başlatın: `npm run dev`
-2. Tarayıcıda `http://localhost:3000/admin/login` adresine gidin
+2. Tarayıcıda `https://www.matbaagross.com/admin/login` adresine gidin
 3. Admin bilgileriyle giriş yapın
 
 ## 4. Güvenlik Notları

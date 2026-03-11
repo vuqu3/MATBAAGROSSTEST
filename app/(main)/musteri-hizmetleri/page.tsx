@@ -129,7 +129,11 @@ export default function MusteriHizmetleriPage() {
                 </span>
               </div>
               <p className="text-gray-600">
-                Hafta içi 09:00 - 18:00 saatleri arasında 0850 123 45 67 numaralı hattan bize ulaşabilirsiniz.
+                Hafta içi 09:00 - 18:00 saatleri arasında{' '}
+                <a href="tel:+905333683909" className="font-semibold text-orange-600 hover:underline">
+                  +90 533 368 39 09
+                </a>{' '}
+                numaralı hattan bize ulaşabilirsiniz.
               </p>
             </div>
           </div>

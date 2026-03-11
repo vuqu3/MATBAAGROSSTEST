@@ -2,13 +2,29 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, FileText, Package, X } from 'lucide-react';
+import { AlertTriangle, FileText, Package, X, Clock, Send, Layers } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useSession } from 'next-auth/react';
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'az önce';
+  if (mins < 60) return `${mins} dakika önce`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} saat önce`;
+  const days = Math.floor(hrs / 24);
+  return `${days} gün önce`;
+}
+
+function getBadge(r: { createdAt: string }) {
+  const ageHours = (Date.now() - new Date(r.createdAt).getTime()) / 3600000;
+  if (ageHours > 168) return { label: 'SÜRESİ DOLDU', cls: 'bg-red-100 text-red-700 border-red-200' };
+  if (ageHours < 24) return { label: 'YENİ', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+  return { label: 'AÇIK', cls: 'bg-amber-100 text-amber-700 border-amber-200' };
+}
 
 export default function TeklifHavuzuPage() {
   const router = useRouter();
-  const { data: session } = useSession();
   const COMMISSION_RATE = 0.1;
   const [openRequestNo, setOpenRequestNo] = useState<string | null>(null);
   const [unitPriceInput, setUnitPriceInput] = useState<string>('');
@@ -20,9 +36,6 @@ export default function TeklifHavuzuPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-
-  // Mevcut satıcının vendorId'si (session'dan gelecek)
-  const currentVendorId = session?.user?.id;
 
   // Verileri yükle
   useEffect(() => {
@@ -38,7 +51,6 @@ export default function TeklifHavuzuPage() {
           return;
         }
 
-        console.log('Bulunan Talepler:', data?.requests);
         setRequests(data?.requests || []);
         setOffers(data?.offers || []);
       } catch (error) {
@@ -63,8 +75,8 @@ export default function TeklifHavuzuPage() {
       if (res.ok) {
         const newQuote = await res.json();
         setOffers((prev) => [newQuote, ...prev]);
-        // Request listesini güncelle
-        setRequests((prev) => prev.map((r) => (r.id === quoteData.requestId ? { ...r, hasQuoted: true } : r)));
+        // Pool kuralı: teklif verdikten sonra iş havuzdan kaybolur
+        setRequests((prev) => prev.filter((r) => r.id !== quoteData.requestId));
         router.push('/seller-dashboard/verilen-teklifler');
       }
     } catch (error) {
@@ -75,7 +87,8 @@ export default function TeklifHavuzuPage() {
   const rows = useMemo(() => {
     return requests.map((r) => ({
       ...r,
-      createdAtText: r.createdAt ? new Date(r.createdAt).toLocaleString('tr-TR') : '-',
+      badge: getBadge(r),
+      timeAgoText: r.createdAt ? timeAgo(r.createdAt) : '-',
     }));
   }, [requests]);
 
@@ -83,6 +96,23 @@ export default function TeklifHavuzuPage() {
     if (!openRequestNo) return null;
     return requests.find((r) => r.requestNo === openRequestNo) ?? null;
   }, [openRequestNo, requests]);
+
+  const selectedSnapshot = useMemo(() => (selectedRequest?.technicalSpecs ?? null) as any, [selectedRequest?.technicalSpecs]);
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.matbaagross.com').replace(/\/+$/, '');
+  const selectedProductUrl = useMemo(() => {
+    const u = selectedSnapshot?.product?.productUrl;
+    if (typeof u === 'string' && u.trim()) {
+      const v = u.trim();
+      return v.startsWith('http') ? v : `${siteUrl}${v.startsWith('/') ? v : `/${v}`}`;
+    }
+    const pid = selectedRequest?.productId;
+    if (typeof pid === 'string' && pid.trim()) return `${siteUrl}/urun/${encodeURIComponent(pid.trim())}`;
+    return '';
+  }, [selectedSnapshot, selectedRequest?.productId, siteUrl]);
+  const selectedThumbUrl = useMemo(() => {
+    const u = selectedSnapshot?.product?.imageUrl;
+    return typeof u === 'string' && u.trim() ? u.trim() : '';
+  }, [selectedSnapshot]);
 
   const selectedFilePreview = useMemo(() => {
     if (!selectedRequest?.fileUrl) return { isImage: false, url: '' };
@@ -201,63 +231,71 @@ export default function TeklifHavuzuPage() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-gray-500">
-                    Şu an teklif havuzunda talep yok.
+                  <td colSpan={4} className="px-4 py-12 text-center">
+                    <Layers className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 font-medium">Şu an teklif havuzunda talep yok.</p>
+                    <p className="text-gray-400 text-sm mt-1">Yeni talepler geldiğinde burada görünecek.</p>
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.requestNo} className="border-t border-gray-100">
-                    <td className="px-4 py-3 font-mono text-gray-800">{r.requestNo}</td>
-                    <td className="px-4 py-3 text-gray-700">
-                      <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-xs text-gray-500">Talep Özeti</p>
-                            <p className="mt-0.5 text-sm font-semibold text-gray-900 truncate">
-                              {(r.description?.trim() || r.technicalDetails?.trim() || r.productName || '-')
-                                .toString()
-                                .slice(0, 120)}
-                              {((r.description?.trim() || r.technicalDetails?.trim() || r.productName || '').toString().length || 0) >
-                              120
-                                ? '...'
-                                : ''}
-                            </p>
-                          </div>
-                          <div className="hidden sm:flex shrink-0 items-center gap-2 rounded-full bg-slate-50 border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                            <Package className="h-4 w-4 text-[#FF6000]" />
-                            Premium Talep
-                          </div>
-                        </div>
+                  <tr key={r.requestNo} className="border-t border-gray-100 hover:bg-gray-50/50 transition-colors">
+                    {/* Talep No + Badge */}
+                    <td className="px-4 py-4 align-top w-36">
+                      <p className="font-mono text-xs text-gray-500 mb-1.5">{r.requestNo}</p>
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${r.badge.cls}`}>
+                        {r.badge.label === 'YENİ' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                        {r.badge.label}
+                      </span>
+                    </td>
 
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
-                            <FileText className="h-4 w-4 text-gray-700" />
-                            <div className="min-w-0">
-                              <p className="text-[11px] text-gray-500 font-semibold">Ürün</p>
-                              <p className="text-xs font-semibold text-gray-900 truncate">{r.productName || '-'}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
-                            <Package className="h-4 w-4 text-gray-700" />
-                            <div className="min-w-0">
-                              <p className="text-[11px] text-gray-500 font-semibold">Adet</p>
-                              <p className="text-xs font-semibold text-gray-900 truncate">
-                                {typeof r.quantity === 'number' ? r.quantity.toLocaleString('tr-TR') : '-'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
+                    {/* Spesifikasyonlar */}
+                    <td className="px-4 py-4 align-top">
+                      <p className="text-sm font-bold text-gray-900 mb-1">{r.productName || '-'}</p>
+                      {(r.description?.trim() || r.technicalDetails?.trim()) && (
+                        <p className="text-xs text-gray-500 mb-3 line-clamp-2">
+                          {r.description?.trim() || r.technicalDetails?.trim()}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <span className="inline-flex items-center gap-1.5 bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-700">
+                          <Package className="h-3.5 w-3.5 text-[#FF6000]" />
+                          {typeof r.quantity === 'number' ? r.quantity.toLocaleString('tr-TR') : '-'} adet
+                        </span>
+                        {r.technicalDetails?.trim() && (
+                          <span className="inline-flex items-center gap-1.5 bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-700">
+                            <FileText className="h-3.5 w-3.5 text-slate-500" />
+                            Teknik detay mevcut
+                          </span>
+                        )}
+                        {r.fileUrl && (
+                          <a
+                            href={r.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Dosyayı Gör
+                          </a>
+                        )}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="text-gray-700">{r.createdAtText}</span>
+
+                    {/* Zaman */}
+                    <td className="px-4 py-4 align-top w-32">
+                      <div className="flex items-center gap-1.5 text-gray-500">
+                        <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="text-xs">{r.timeAgoText}</span>
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
+
+                    {/* Aksiyon */}
+                    <td className="px-4 py-4 align-top w-32">
                       <div className="flex justify-end">
                         <button
                           type="button"
-                          className="inline-flex items-center gap-2 rounded-lg bg-[#FF6000] px-3 py-2 text-white font-semibold hover:bg-[#e55a00] transition-colors"
+                          className="inline-flex items-center gap-2 rounded-lg bg-[#FF6000] px-3 py-2 text-white text-sm font-semibold hover:bg-[#e55a00] transition-colors shadow-sm"
                           onClick={() => {
                             setOpenRequestNo(r.requestNo);
                             setUnitPriceInput('');
@@ -266,7 +304,7 @@ export default function TeklifHavuzuPage() {
                             setSellerNote('');
                           }}
                         >
-                          <FileText className="h-4 w-4" />
+                          <Send className="h-3.5 w-3.5" />
                           Teklif Ver
                         </button>
                       </div>
@@ -279,285 +317,236 @@ export default function TeklifHavuzuPage() {
         </div>
       </div>
 
+      {/* Teklif Ver Modal */}
       <AnimatePresence>
-        {openRequestNo && selectedRequest && competitionInfo && (
+        {openRequestNo && selectedRequest && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setOpenRequestNo(null)}
           >
             <motion.div
-              className="w-full max-w-5xl rounded-2xl bg-white shadow-xl"
-              initial={{ opacity: 0, y: 16, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 220, damping: 20 }}
-              onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+              className="w-full sm:max-w-2xl bg-white sm:rounded-2xl shadow-2xl overflow-y-auto max-h-[95vh]"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 24 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 sticky top-0 bg-white z-10">
                 <div>
-                  <p className="text-xs font-semibold text-[#FF6000]">Sizin için seçilen özel talep</p>
-                  <h2 className="text-lg font-bold text-gray-900">
-                    Talep: <span className="font-mono">{selectedRequest.requestNo}</span>
-                  </h2>
-                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{selectedRequest.productName}</p>
+                  <p className="text-xs font-mono text-gray-400">{selectedRequest.requestNo}</p>
+                  <div className="mt-0.5 flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-xl overflow-hidden bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0">
+                      {selectedThumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={selectedThumbUrl} alt={selectedRequest.productName} className="h-full w-full object-contain" />
+                      ) : (
+                        <div className="text-[10px] text-gray-400">Ürün</div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-gray-900 truncate">{selectedRequest.productName}</h2>
+                      {selectedProductUrl ? (
+                        <a
+                          href={selectedProductUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-flex items-center gap-2 text-xs font-extrabold text-blue-700 hover:text-blue-800 hover:underline"
+                        >
+                          🔗 Ürün Sayfasına Git
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                    <span className="font-semibold text-gray-700">
+                      {typeof selectedRequest.quantity === 'number'
+                        ? selectedRequest.quantity.toLocaleString('tr-TR')
+                        : '-'} adet
+                    </span>
+                    {competitionInfo && competitionInfo.offersCount > 0 && (
+                      <span className="flex items-center gap-1 text-amber-600">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        {competitionInfo.offersCount} rakip teklif mevcut
+                      </span>
+                    )}
+                  </div>
                 </div>
-
-                <button
-                  type="button"
-                  className="rounded-lg p-2 text-gray-500 hover:bg-gray-50"
-                  onClick={() => setOpenRequestNo(null)}
-                >
+                <button type="button" onClick={() => setOpenRequestNo(null)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="px-6 py-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                      {selectedFilePreview.isImage ? (
-                        <img
-                          src={selectedFilePreview.url}
-                          alt="Müşteri dosyası"
-                          className="w-full h-48 object-contain"
-                        />
-                      ) : (
-                        <div className="h-48 flex items-center justify-center text-sm font-semibold text-gray-500">
-                          Dosya önizlemesi yok
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500">Müşteri Görseli</p>
-
-                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                      <p className="text-sm font-bold text-gray-900">Talep Detayları</p>
-
-                      <div className="mt-3 space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <p className="text-sm text-gray-600">Ürün</p>
-                          <p className="text-sm font-semibold text-gray-900 text-right">{selectedRequest.productName || '-'}</p>
-                        </div>
-
-                        <div className="flex items-start justify-between gap-4">
-                          <p className="text-sm text-gray-600">Adet</p>
-                          <p className="text-sm font-semibold text-gray-900 text-right">
-                            {typeof selectedRequest.quantity === 'number'
-                              ? selectedRequest.quantity.toLocaleString('tr-TR')
-                              : '-'}
-                          </p>
-                        </div>
-
-                        {selectedRequest.technicalDetails?.trim() ? (
-                          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                            <p className="text-xs font-semibold text-gray-600">Teknik Detay</p>
-                            <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">
-                              {selectedRequest.technicalDetails}
-                            </p>
-                          </div>
-                        ) : null}
-
-                        {selectedRequest.description?.trim() ? (
-                          <div className="rounded-xl border border-gray-200 bg-white p-4">
-                            <p className="text-xs font-semibold text-gray-600">Talep Özeti</p>
-                            <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">{selectedRequest.description}</p>
-                          </div>
-                        ) : null}
-
-                        {selectedRequest.fileUrl ? (
-                          <div>
-                            <a
-                              href={selectedRequest.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sm font-semibold text-[#FF6000] hover:underline"
-                            >
-                              Ekli Dosyayı İncele
-                            </a>
-                          </div>
-                        ) : null}
+              <div className="px-5 py-5 space-y-5">
+                {/* Talep bilgileri */}
+                {(selectedRequest.description?.trim() || selectedRequest.technicalDetails?.trim()) && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2">
+                    {selectedRequest.description?.trim() && (
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Açıklama</p>
+                        <p className="text-sm text-gray-800 whitespace-pre-wrap">{selectedRequest.description}</p>
                       </div>
+                    )}
+                    {selectedRequest.technicalDetails?.trim() && (
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Teknik Detay</p>
+                        <p className="text-sm text-gray-800 whitespace-pre-wrap">{selectedRequest.technicalDetails}</p>
+                      </div>
+                    )}
+                    {selectedRequest.fileUrl && (
+                      <a href={selectedRequest.fileUrl} target="_blank" rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#FF6000] hover:underline mt-1">
+                        <FileText className="h-3.5 w-3.5" /> Ekli dosyayı görüntüle
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Fiyatlandırma */}
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-gray-800">Fiyat Teklifi</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Birim Fiyat (TL)</label>
+                      <input
+                        value={unitPriceInput}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          const next = e.target.value;
+                          setUnitPriceInput(next);
+                          const n = parseMoney(next);
+                          if (!quantity || !n) return;
+                          setTotalPriceInput(String(roundTo(n * quantity, 2)));
+                        }}
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Toplam Fiyat (TL) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        value={totalPriceInput}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          const next = e.target.value;
+                          setTotalPriceInput(next);
+                          const n = parseMoney(next);
+                          if (!quantity || !n) return;
+                          setUnitPriceInput(String(roundTo(n / quantity, 4)));
+                        }}
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400"
+                      />
                     </div>
                   </div>
+                  {numericTotalPrice && (
+                    <p className="text-xs text-gray-500">
+                      Müşteriye gösterilecek fiyat (komisyon dahil):{' '}
+                      <span className="font-semibold text-gray-800">
+                        {finalPrice?.toLocaleString('tr-TR')} TL
+                      </span>
+                    </p>
+                  )}
+                </div>
 
-                  <div className="space-y-4">
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
-                        <div>
-                          <p className="font-semibold text-amber-900">
-                            Şu an {competitionInfo.offersCount} firma teklif verdi, son {Math.min(2, competitionInfo.remainingSlots)} koltuk!
-                          </p>
-                          <p className="text-sm text-amber-800 mt-1">
-                            Rekabet yüksek. Hızlı ve rekabetçi fiyatla öne çıkabilirsiniz.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                      <p className="text-sm text-gray-600">Şu anki En Düşük Fiyat</p>
-                      <p className="text-3xl font-extrabold text-gray-900 mt-1">
-                        {competitionInfo.lowest === null ? 'Yok' : `${competitionInfo.lowest.toLocaleString('tr-TR')} TL`}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Müşteriye gidecek son fiyat (komisyon dahil):{' '}
-                        <span className="font-semibold text-gray-800">
-                          {finalPrice === null ? '-' : `${finalPrice.toLocaleString('tr-TR')} TL`}
-                        </span>
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                      <div className="flex flex-col gap-4">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-800">Fiyatlandırma</label>
-                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-700">Birim Fiyat (TL)</label>
-                              <input
-                                value={unitPriceInput}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                  const next = e.target.value;
-                                  setUnitPriceInput(next);
-                                  const n = parseMoney(next);
-                                  if (!quantity || !n) return;
-                                  const t = roundTo(n * quantity, 2);
-                                  setTotalPriceInput(String(t));
-                                }}
-                                inputMode="decimal"
-                                placeholder="Örn: 0,10"
-                                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-orange-200"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-700">Toplam Fiyat (TL)</label>
-                              <input
-                                value={totalPriceInput}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                  const next = e.target.value;
-                                  setTotalPriceInput(next);
-                                  const n = parseMoney(next);
-                                  if (!quantity || !n) return;
-                                  const u = roundTo(n / quantity, 4);
-                                  setUnitPriceInput(String(u));
-                                }}
-                                inputMode="decimal"
-                                placeholder="Örn: 1500"
-                                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-orange-200"
-                              />
-                            </div>
-                          </div>
-                          <p className="mt-2 text-xs text-gray-500">
-                            Adet: <span className="font-semibold text-gray-800">{quantity ? quantity.toLocaleString('tr-TR') : '-'}</span>
-                          </p>
-                          <input
-                            value=""
-                            readOnly
-                            className="hidden"
-                          />
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-3">
-                          <div className="flex-1">
-                            <label className="block text-sm font-semibold text-gray-800">Teslimat Süresi</label>
-                            <input
-                              value={deliveryTimeInput}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDeliveryTimeInput(e.target.value)}
-                              placeholder="Örn: 5 iş günü"
-                              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-orange-200"
-                            />
-                          </div>
-                          <div className="flex-1" />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-800">Satıcı Notu</label>
-                          <textarea
-                            value={sellerNote}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSellerNote(e.target.value)}
-                            rows={3}
-                            placeholder="Örn: Üst kalite selefon kullanılacaktır"
-                            className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-orange-200"
-                          />
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={!numericTotalPrice || !cleanedDeliveryTime}
-                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#FF6000] px-4 py-3 text-white font-extrabold hover:bg-[#e55a00] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                          onClick={() => setShowConfirmModal(true)}
-                        >
-                          Teklifi Ateşle
-                        </button>
-
-                        <p className="text-xs text-gray-600">
-                          Premium üyeliğiniz kapsamında bugünkü sınırsız teklif verme hakkınız tanımlanmıştır.
-                        </p>
-                      </div>
-                    </div>
+                {/* Teslimat + Not */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Teslimat Süresi <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      value={deliveryTimeInput}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDeliveryTimeInput(e.target.value)}
+                      placeholder="Örn: 5 iş günü"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Not (İsteğe Bağlı)</label>
+                    <input
+                      value={sellerNote}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSellerNote(e.target.value)}
+                      placeholder="Örn: Mat selefon uygulanır"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400"
+                    />
                   </div>
                 </div>
+
+                {/* Submit */}
+                <button
+                  type="button"
+                  disabled={!numericTotalPrice || !cleanedDeliveryTime}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#FF6000] px-5 py-3 text-white font-bold text-sm hover:bg-[#e55a00] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  onClick={() => setShowConfirmModal(true)}
+                >
+                  <Send className="h-4 w-4" />
+                  Teklif Gönder
+                </button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Confirmation Modal */}
+      {/* Onay Modalı */}
       <AnimatePresence>
         {showConfirmModal && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowConfirmModal(false)}
           >
             <motion.div
-              className="w-full max-w-md rounded-2xl bg-white shadow-xl"
-              initial={{ opacity: 0, y: 16, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 220, damping: 20 }}
-              onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              <div className="p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Teklif Onayı</h3>
-                <p className="text-sm text-gray-600 mb-6">
-                  Verdiğiniz teklif müşteri tarafından görüntülenecek. Lütfen fiyatlarınızı ve maliyetlerinizi kontrol edin. Onaylıyor musunuz?
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
-                    onClick={() => setShowConfirmModal(false)}
-                  >
-                    İptal
-                  </button>
-                  <button
-                    type="button"
-                    className="flex-1 rounded-lg bg-[#FF6000] px-4 py-2 text-white font-semibold hover:bg-[#e55a00] transition-colors"
-                    onClick={() => {
-                      if (!numericTotalPrice) return;
-                      if (!cleanedDeliveryTime) return;
-                      addQuote({
-                        requestId: selectedRequest!.id,
-                        price: numericTotalPrice,
-                        unitPrice: numericUnitPrice,
-                        totalPrice: numericTotalPrice,
-                        deliveryTime: cleanedDeliveryTime,
-                        note: sellerNote.trim() ? sellerNote.trim() : '',
-                      });
-                      setOpenRequestNo(null);
-                      setShowConfirmModal(false);
-                    }}
-                  >
-                    Onayla
-                  </button>
-                </div>
+              <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+                <Send className="h-5 w-5 text-[#FF6000]" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 text-center mb-2">Teklifi Gönder</h3>
+              <p className="text-sm text-gray-500 text-center mb-1">
+                <span className="font-semibold text-gray-800">{numericTotalPrice?.toLocaleString('tr-TR')} TL</span> toplam fiyat teklifi gönderilecek.
+              </p>
+              <p className="text-xs text-gray-400 text-center mb-6">Teslimat: {cleanedDeliveryTime}</p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+                  onClick={() => setShowConfirmModal(false)}
+                >
+                  Geri Dön
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 rounded-xl bg-[#FF6000] px-4 py-2.5 text-sm text-white font-bold hover:bg-[#e55a00] transition-colors"
+                  onClick={() => {
+                    if (!numericTotalPrice || !cleanedDeliveryTime) return;
+                    addQuote({
+                      requestId: selectedRequest!.id,
+                      price: numericTotalPrice,
+                      unitPrice: numericUnitPrice,
+                      totalPrice: numericTotalPrice,
+                      deliveryTime: cleanedDeliveryTime,
+                      note: sellerNote.trim(),
+                    });
+                    setOpenRequestNo(null);
+                    setShowConfirmModal(false);
+                  }}
+                >
+                  Onayla ve Gönder
+                </button>
               </div>
             </motion.div>
           </motion.div>

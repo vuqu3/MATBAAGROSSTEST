@@ -31,6 +31,7 @@ interface ProductInfoProps {
   name: string;
   category: { name: string; slug: string };
   vendorName: string;
+  isBrandQuoteCategory?: boolean;
   highlights?: Record<string, string> | null;
   attributes?: ProductAttribute[] | null;
   description?: string | null;
@@ -64,6 +65,7 @@ export default function ProductInfo({
   name,
   category,
   vendorName,
+  isBrandQuoteCategory,
   highlights = {},
   attributes = [],
   description,
@@ -93,10 +95,16 @@ export default function ProductInfo({
 
   return (
     <div className="space-y-6">
-      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-full text-xs font-medium text-gray-700">
-        <span className="text-gray-500">Satıcı:</span>
-        <span className="text-[#f97316] font-semibold">{vendorName}</span>
-      </div>
+      {isBrandQuoteCategory ? (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0b1f3a] rounded-full text-xs font-semibold text-white shadow-sm">
+          🛡️ Matbaagross Premium Güvencesiyle Markanıza Özel Üretim
+        </div>
+      ) : (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-full text-xs font-medium text-gray-700">
+          <span className="text-gray-500">Satıcı:</span>
+          <span className="text-[#f97316] font-semibold">{vendorName}</span>
+        </div>
+      )}
 
       <h1 className="text-2xl md:text-3xl font-semibold text-gray-900 leading-tight tracking-tight">
         {name}
